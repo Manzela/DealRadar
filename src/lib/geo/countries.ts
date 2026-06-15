@@ -1,0 +1,38 @@
+/** Supported countries: display names, default locale and currency per country. */
+import type { CountryCode } from '../providers/types';
+
+export interface CountryInfo {
+  code: CountryCode;
+  name: string;       // English name; UI translates via messages where needed
+  locale: string;     // default UI locale for this country
+  currency: string;   // ISO 4217
+}
+
+export const COUNTRIES: CountryInfo[] = [
+  { code: 'DE', name: 'Germany',        locale: 'de', currency: 'EUR' },
+  { code: 'AT', name: 'Austria',        locale: 'de', currency: 'EUR' },
+  { code: 'FR', name: 'France',         locale: 'fr', currency: 'EUR' },
+  { code: 'ES', name: 'Spain',          locale: 'es', currency: 'EUR' },
+  { code: 'IT', name: 'Italy',          locale: 'it', currency: 'EUR' },
+  { code: 'PL', name: 'Poland',         locale: 'pl', currency: 'PLN' },
+  { code: 'NL', name: 'Netherlands',    locale: 'nl', currency: 'EUR' },
+  { code: 'PT', name: 'Portugal',       locale: 'pt', currency: 'EUR' },
+  { code: 'SE', name: 'Sweden',         locale: 'sv', currency: 'SEK' },
+  { code: 'RO', name: 'Romania',        locale: 'ro', currency: 'RON' },
+  { code: 'GB', name: 'United Kingdom', locale: 'en', currency: 'GBP' },
+  { code: 'BE', name: 'Belgium',        locale: 'nl', currency: 'EUR' },
+  { code: 'DK', name: 'Denmark',        locale: 'en', currency: 'DKK' },
+  { code: 'FI', name: 'Finland',        locale: 'en', currency: 'EUR' },
+  { code: 'NO', name: 'Norway',         locale: 'en', currency: 'NOK' },
+  { code: 'CH', name: 'Switzerland',    locale: 'de', currency: 'CHF' },
+];
+
+export const DEFAULT_COUNTRY: CountryCode = 'DE';
+
+export function isSupportedCountry(code: string): code is CountryCode {
+  return COUNTRIES.some((c) => c.code === code);
+}
+
+export function countryInfo(code: CountryCode): CountryInfo {
+  return COUNTRIES.find((c) => c.code === code)!;
+}

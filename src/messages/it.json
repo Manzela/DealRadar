@@ -1,0 +1,78 @@
+{
+  "home": {
+    "topDeals": "Top deals in {country}",
+    "noDeals": "No deals available for your location yet. Check back soon."
+  },
+  "categories": {
+    "heading": "Browse by category",
+    "electronics": "Electronics",
+    "fashion": "Fashion",
+    "home-garden": "Home & Garden",
+    "sports": "Sports",
+    "beauty": "Beauty",
+    "food-grocery": "Food & Grocery",
+    "toys": "Toys",
+    "automotive": "Automotive",
+    "books": "Books",
+    "travel": "Travel"
+  },
+  "deal": {
+    "goToDeal": "Go to deal",
+    "sponsored": "Sponsored",
+    "priceHistory": "Price · last 3 months",
+    "today": "Today"
+  },
+  "search": {
+    "placeholder": "Search products, brands…",
+    "products": "Products",
+    "categories": "Categories",
+    "brands": "Brands",
+    "seeAll": "See all results",
+    "resultsFor": "Results for “{q}”",
+    "allResults": "All deals",
+    "noResults": "No deals match your filters. Try widening the price range or lowering the minimum discount."
+  },
+  "filters": {
+    "heading": "Filters",
+    "sort": "Sort by",
+    "sortDiscount": "Biggest discount",
+    "sortPriceAsc": "Price: low to high",
+    "sortPriceDesc": "Price: high to low",
+    "sortNewest": "Newest",
+    "category": "Category",
+    "allCategories": "All categories",
+    "brand": "Brand",
+    "allBrands": "All brands",
+    "priceRange": "Price range",
+    "min": "Min",
+    "max": "Max",
+    "minDiscount": "Minimum discount",
+    "apply": "Apply filters"
+  },
+  "geo": {
+    "promptTitle": "Show deals near you?",
+    "promptBody": "Allow location access to see deals from shops in your city. If you decline, we estimate your country from your IP address.",
+    "allow": "Allow location",
+    "useIpInstead": "Use my IP instead",
+    "changeLocation": "Change location",
+    "country": "Country",
+    "cityOptional": "City (optional)",
+    "cityPlaceholder": "e.g. Berlin",
+    "apply": "Apply"
+  },
+  "gdpr": {
+    "bannerTitle": "Cookies on DealRadar",
+    "bannerBody": "We use essential cookies for language and location. Optional cookies help us improve the site with anonymous usage statistics.",
+    "essentialOnly": "Essential only",
+    "acceptAll": "Accept all"
+  },
+  "nav": {
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "subcategories": "subcategories",
+    "brands": "Brands"
+  },
+  "footer": {
+    "affiliateDisclosure": "Deals marked “Sponsored” earn us a commission when you buy — at no extra cost to you."
+  }
+}

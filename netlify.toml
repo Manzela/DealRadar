@@ -1,0 +1,11 @@
+[build]
+  command = "pnpm build"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Netlify's Next.js runtime — handles SSR, API routes, middleware and
+# next/image as serverless/edge functions. Do not set `publish` manually;
+# the plugin configures it.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

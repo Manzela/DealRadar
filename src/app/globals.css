@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply antialiased;
+  }
+  body {
+    @apply bg-white text-zinc-900;
+  }
+  /* Visible keyboard focus everywhere — accessibility floor. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2;
+  }
+}
+
+@layer utilities {
+  /* Respect reduced motion: kill the card hover-lift transitions. */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
+}

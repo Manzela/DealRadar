@@ -1,0 +1,78 @@
+{
+  "home": {
+    "topDeals": "Top-Angebote in {country}",
+    "noDeals": "Für deinen Standort sind noch keine Angebote verfügbar. Schau bald wieder vorbei."
+  },
+  "categories": {
+    "heading": "Nach Kategorie stöbern",
+    "electronics": "Elektronik",
+    "fashion": "Mode",
+    "home-garden": "Haus & Garten",
+    "sports": "Sport",
+    "beauty": "Beauty",
+    "food-grocery": "Lebensmittel",
+    "toys": "Spielzeug",
+    "automotive": "Auto & Motorrad",
+    "books": "Bücher",
+    "travel": "Reisen"
+  },
+  "deal": {
+    "goToDeal": "Zum Angebot",
+    "sponsored": "Anzeige",
+    "priceHistory": "Preis · letzte 3 Monate",
+    "today": "Heute"
+  },
+  "search": {
+    "placeholder": "Produkte, Marken suchen…",
+    "products": "Produkte",
+    "categories": "Kategorien",
+    "brands": "Marken",
+    "seeAll": "Alle Ergebnisse anzeigen",
+    "resultsFor": "Ergebnisse für „{q}“",
+    "allResults": "Alle Angebote",
+    "noResults": "Keine Angebote entsprechen deinen Filtern. Erweitere die Preisspanne oder senke den Mindestrabatt."
+  },
+  "filters": {
+    "heading": "Filter",
+    "sort": "Sortieren nach",
+    "sortDiscount": "Größter Rabatt",
+    "sortPriceAsc": "Preis: aufsteigend",
+    "sortPriceDesc": "Preis: absteigend",
+    "sortNewest": "Neueste",
+    "category": "Kategorie",
+    "allCategories": "Alle Kategorien",
+    "brand": "Marke",
+    "allBrands": "Alle Marken",
+    "priceRange": "Preisspanne",
+    "min": "Min",
+    "max": "Max",
+    "minDiscount": "Mindestrabatt",
+    "apply": "Filter anwenden"
+  },
+  "geo": {
+    "promptTitle": "Angebote in deiner Nähe anzeigen?",
+    "promptBody": "Erlaube den Standortzugriff, um Angebote aus Geschäften in deiner Stadt zu sehen. Wenn du ablehnst, schätzen wir dein Land anhand deiner IP-Adresse.",
+    "allow": "Standort erlauben",
+    "useIpInstead": "Stattdessen IP verwenden",
+    "changeLocation": "Standort ändern",
+    "country": "Land",
+    "cityOptional": "Stadt (optional)",
+    "cityPlaceholder": "z. B. Berlin",
+    "apply": "Übernehmen"
+  },
+  "gdpr": {
+    "bannerTitle": "Cookies bei DealRadar",
+    "bannerBody": "Wir verwenden essenzielle Cookies für Sprache und Standort. Optionale Cookies helfen uns, die Seite mit anonymen Nutzungsstatistiken zu verbessern.",
+    "essentialOnly": "Nur essenzielle",
+    "acceptAll": "Alle akzeptieren"
+  },
+  "nav": {
+    "openMenu": "Menü öffnen",
+    "closeMenu": "Menü schließen",
+    "subcategories": "Unterkategorien",
+    "brands": "Marken"
+  },
+  "footer": {
+    "affiliateDisclosure": "Mit „Anzeige“ markierte Angebote bringen uns eine Provision, wenn du kaufst — ohne Mehrkosten für dich."
+  }
+}

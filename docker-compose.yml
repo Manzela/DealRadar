@@ -1,0 +1,26 @@
+# Local dev: app + a cron sidecar that keeps deal data ≤30 min fresh.
+# Supabase and Upstash are managed services — point .env.local at them
+# (or run nothing: the app falls back to mock providers in-memory).
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    restart: unless-stopped
+
+  # Hits /api/refresh every 15 minutes — half the 30-min freshness bound.
+  cron:
+    image: curlimages/curl:8.10.1
+    depends_on:
+      - web
+    env_file:
+      - .env.local
+    entrypoint: /bin/sh
+    command: >
+      -c 'while true; do
+        curl -s -X POST -H "Authorization: Bearer $${CRON_SECRET}" http://web:3000/api/refresh || true;
+        sleep 900;
+      done'
+    restart: unless-stopped
