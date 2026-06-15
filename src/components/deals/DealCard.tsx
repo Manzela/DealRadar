@@ -37,11 +37,6 @@ export function DealCard({ deal, priority = false }: { deal: NormalizedDeal; pri
         <Badge variant="deal" className="absolute left-2 top-2 text-sm">
           {formatDiscount(deal.discountPercent)}
         </Badge>
-        {deal.isSponsored && (
-          <Badge variant="sponsored" className="absolute right-2 top-2">
-            {t('sponsored')}
-          </Badge>
-        )}
       </div>
 
       <div className="flex flex-1 flex-col gap-1.5 p-4">

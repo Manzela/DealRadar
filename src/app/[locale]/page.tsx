@@ -1,7 +1,6 @@
 import { cookies } from 'next/headers';
 import { setRequestLocale } from 'next-intl/server';
 import { HeroDeals } from '@/components/home/HeroDeals';
-import { CategoryGrid } from '@/components/home/CategoryGrid';
 import { parseLocationCookie, LOCATION_COOKIE } from '@/lib/geo/resolve';
 import { DEFAULT_COUNTRY } from '@/lib/geo/countries';
 
@@ -17,7 +16,6 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   return (
     <>
       <HeroDeals country={loc?.country ?? DEFAULT_COUNTRY} city={loc?.city ?? null} />
-      <CategoryGrid />
     </>
   );
 }

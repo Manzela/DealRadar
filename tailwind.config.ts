@@ -40,10 +40,17 @@ const config: Config = {
           '75%': { transform: 'rotate(5deg)' },
           '100%': { transform: 'rotate(0)', color: '#DC2626' },
         },
+        // Fades a chevron in then out; staggered across the 3 stacked chevrons
+        // it reads as a downward "push" hint.
+        'chevron-hint': {
+          '0%, 100%': { opacity: '0.2' },
+          '35%': { opacity: '1' },
+        },
       },
       animation: {
         // 1s delay, then a 1s ring; `forwards` keeps it red while hovering.
         'bell-alert': 'bell-alert 1s ease-in-out 1s forwards',
+        'chevron-hint': 'chevron-hint 1.4s ease-in-out infinite',
       },
     },
   },

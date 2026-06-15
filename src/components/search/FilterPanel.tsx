@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 
-export function FilterPanel({ brands }: { brands: string[] }) {
+export function FilterPanel({ brands, category }: { brands: string[]; category?: string }) {
   const t = useTranslations();
   const router = useRouter();
   const pathname = usePathname();
@@ -27,6 +27,16 @@ export function FilterPanel({ brands }: { brands: string[] }) {
     const next = new URLSearchParams(params.toString());
     if (value) next.set(key, value); else next.delete(key);
     router.push(`${pathname}?${next.toString()}`);
+  };
+
+  // Category lives in the route (/category/<slug>), not a query param, so
+  // changing it must navigate. "All categories" falls back to /search.
+  const goToCategory = (slug: string) => {
+    const next = new URLSearchParams(params.toString());
+    next.delete('category');
+    const qs = next.toString();
+    const suffix = qs ? `?${qs}` : '';
+    router.push(slug ? `/category/${slug}${suffix}` : `/search${suffix}`);
   };
 
   const applyPrices = () => {
@@ -62,8 +72,8 @@ export function FilterPanel({ brands }: { brands: string[] }) {
         </label>
         <select
           id="f-category"
-          value={params.get('category') ?? ''}
-          onChange={(e) => setParam('category', e.target.value)}
+          value={category ?? params.get('category') ?? ''}
+          onChange={(e) => goToCategory(e.target.value)}
           className="mt-1 h-10 w-full rounded-lg border border-zinc-200 bg-white px-2 text-sm"
         >
           <option value="">{t('filters.allCategories')}</option>

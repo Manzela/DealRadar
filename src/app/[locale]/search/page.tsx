@@ -53,7 +53,7 @@ export default async function SearchPage({
 
   return (
     <div className="grid gap-8 lg:grid-cols-[240px_1fr]">
-      <FilterPanel brands={brands} />
+      <FilterPanel brands={brands} category={category} />
       <section aria-live="polite">
         <h1 className="mb-6 text-xl font-semibold tracking-tight">
           {filters.q ? t('resultsFor', { q: filters.q }) : t('allResults')}

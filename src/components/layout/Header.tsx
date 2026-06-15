@@ -1,5 +1,4 @@
 import { Link } from '@/i18n/routing';
-import { BurgerMenu } from './BurgerMenu';
 import { SearchBar } from '@/components/search/SearchBar';
 import { LocationPicker } from './LocationPicker';
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -10,7 +9,6 @@ export function Header() {
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-100 bg-white/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4">
-        <BurgerMenu />
         <Link href="/" className="flex shrink-0 items-center gap-1.5" aria-label="DealRadar — home">
           <Radar className="h-6 w-6 text-accent" aria-hidden />
           <span className="hidden text-lg font-semibold tracking-tight sm:inline">

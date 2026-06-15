@@ -6,6 +6,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, setRequestLocale } from 'next-intl/server';
 import { routing, type Locale } from '@/i18n/routing';
 import { Header } from '@/components/layout/Header';
+import { CategoryMenu } from '@/components/layout/CategoryMenu';
 import { Footer } from '@/components/layout/Footer';
 import { LocationProvider } from '@/components/layout/LocationContext';
 import { CookieBanner } from '@/components/gdpr/CookieBanner';
@@ -49,7 +50,10 @@ export default async function LocaleLayout({
         <NextIntlClientProvider messages={messages}>
           <LocationProvider initial={initialLocation}>
             <Header />
-            <main className="mx-auto min-h-[60vh] max-w-7xl px-4 py-8">{children}</main>
+            <main className="mx-auto min-h-[60vh] max-w-7xl px-4 py-8">
+              <CategoryMenu />
+              {children}
+            </main>
             <Footer />
             <GeoConsentPrompt />
             <CookieBanner />
