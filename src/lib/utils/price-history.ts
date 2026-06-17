@@ -49,3 +49,26 @@ export function priceWindow(deal: NormalizedDeal): PriceWindow {
 
   return { low: round2(low), high: round2(high), current, position };
 }
+
+/**
+ * A deterministic synthetic "cardiogram" series for the price line — a jagged
+ * walk within the window's [low, high], seeded from `productId` so it's stable
+ * across reloads. It's the decorative price-history shape; the marker's
+ * horizontal position is driven separately by `window.position` (today's price).
+ */
+export function priceSeries(deal: NormalizedDeal, points = 28): number[] {
+  const { low, high } = priceWindow(deal);
+  const span = high - low || 1;
+  const mid = low + span * 0.5;
+  const rnd = seeded(deal.productId + '|cardio');
+
+  let v = low + span * (0.35 + rnd() * 0.3);
+  const out: number[] = [];
+  for (let i = 0; i < points; i++) {
+    // Random step with light mean-reversion so the line stays lively but in-band.
+    const step = (rnd() - 0.5) * span * 0.55 + (mid - v) * 0.08;
+    v = Math.min(high, Math.max(low, v + step));
+    out.push(round2(v));
+  }
+  return out;
+}
