@@ -5,7 +5,7 @@
  * grouped dropdown (products / categories / brands, max 8 rows). Enter or
  * "See all results" → full results page.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter, Link } from '@/i18n/routing';
 import Image from 'next/image';
@@ -24,7 +24,8 @@ interface SearchResult {
 
 const EMPTY: SearchResult = { products: [], categories: [], brands: [] };
 
-export function SearchBar() {
+export function SearchBar({ variant = 'header' }: { variant?: 'header' | 'hero' } = {}) {
+  const isHero = variant === 'hero';
   const t = useTranslations();
   const locale = useLocale();
   const router = useRouter();
@@ -36,6 +37,7 @@ export function SearchBar() {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const abortRef = useRef<AbortController>();
   const rootRef = useRef<HTMLDivElement>(null);
+  const dropdownId = useId();
 
   // Close on outside click.
   useEffect(() => {
@@ -86,26 +88,46 @@ export function SearchBar() {
 
   return (
     <div ref={rootRef} className="relative w-full max-w-xl">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden />
-        <input
-          type="search"
-          role="combobox"
-          aria-expanded={open}
-          aria-controls="search-dropdown"
-          aria-label={t('search.placeholder')}
-          value={q}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && goToResults()}
-          onFocus={() => total > 0 && setOpen(true)}
-          placeholder={t('search.placeholder')}
-          className="h-10 w-full rounded-lg border border-zinc-200 bg-zinc-50 pl-9 pr-3 text-sm placeholder:text-zinc-400 focus:border-accent focus:bg-white"
-        />
-      </div>
+      <form
+        onSubmit={(e) => { e.preventDefault(); goToResults(); }}
+        className={isHero ? 'flex gap-2' : ''}
+      >
+        <div className="relative flex-1">
+          <Search
+            className={`pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 ${isHero ? 'left-3.5' : 'left-3'}`}
+            aria-hidden
+          />
+          <input
+            type="search"
+            role="combobox"
+            aria-expanded={open}
+            aria-controls={dropdownId}
+            aria-label={t('search.placeholder')}
+            value={q}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && goToResults()}
+            onFocus={() => total > 0 && setOpen(true)}
+            placeholder={t('search.placeholder')}
+            className={
+              isHero
+                ? 'h-12 w-full rounded-xl border border-zinc-200 bg-white pl-10 pr-3 text-base placeholder:text-zinc-400 shadow-sm focus:border-accent focus:outline-none'
+                : 'h-10 w-full rounded-lg border border-zinc-200 bg-zinc-50 pl-9 pr-3 text-sm placeholder:text-zinc-400 focus:border-accent focus:bg-white'
+            }
+          />
+        </div>
+        {isHero && (
+          <button
+            type="submit"
+            className="inline-flex h-12 shrink-0 items-center justify-center rounded-xl bg-accent px-6 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
+          >
+            {t('home.heroCta')}
+          </button>
+        )}
+      </form>
 
       {open && total > 0 && (
         <div
-          id="search-dropdown"
+          id={dropdownId}
           className="absolute top-full z-40 mt-2 w-full overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-card-hover"
         >
           {visibleProducts.length > 0 && (

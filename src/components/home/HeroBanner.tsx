@@ -1,19 +1,20 @@
 import { getTranslations } from 'next-intl/server';
-import { Search, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
+import { SearchBar } from '@/components/search/SearchBar';
 
 /**
- * Home hero: headline + value prop, a prominent search (native GET form → the
- * results page, works without JS) and a trust disclosure, with a decorative
+ * Home hero: headline + value prop, a prominent search (the dynamic SearchBar
+ * with live suggestions) and a trust disclosure, with a decorative
  * illustration. A rounded warm-peach card constrained to the content width
  * (same as the deal grid); sits between the header and the category bar.
  * Server component.
  */
-export async function HeroBanner({ locale }: { locale: string }) {
+export async function HeroBanner() {
   const t = await getTranslations();
 
   return (
     <section className="mx-auto max-w-7xl px-4 pt-8">
-      <div className="overflow-hidden rounded-2xl border border-orange-100 bg-gradient-to-br from-[#FFF7F1] via-[#FFF0E6] to-[#FFE6D5]">
+      <div className="rounded-2xl border border-orange-100 bg-gradient-to-br from-[#FFF7F1] via-[#FFF0E6] to-[#FFE6D5]">
         <div className="grid items-center gap-6 px-6 py-10 md:grid-cols-[1.2fr_1fr] md:px-10 md:py-12">
           <div>
           <h1 className="text-3xl font-bold leading-tight tracking-tight text-zinc-900 sm:text-4xl">
@@ -23,28 +24,9 @@ export async function HeroBanner({ locale }: { locale: string }) {
           </h1>
           <p className="mt-3 max-w-md text-sm text-zinc-600 sm:text-base">{t('home.heroSubtitle')}</p>
 
-          <form action={`/${locale}/search`} method="get" className="mt-5 flex max-w-xl gap-2">
-            <div className="relative flex-1">
-              <Search
-                className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
-                aria-hidden
-              />
-              <input
-                name="q"
-                type="search"
-                required
-                aria-label={t('search.placeholder')}
-                placeholder={t('search.placeholder')}
-                className="h-12 w-full rounded-xl border border-zinc-200 bg-white pl-10 pr-3 text-base placeholder:text-zinc-400 shadow-sm focus:border-accent focus:outline-none"
-              />
-            </div>
-            <button
-              type="submit"
-              className="inline-flex h-12 shrink-0 items-center justify-center rounded-xl bg-accent px-6 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
-            >
-              {t('home.heroCta')}
-            </button>
-          </form>
+          <div className="mt-5 max-w-xl">
+            <SearchBar variant="hero" />
+          </div>
 
           <p className="mt-3 flex items-start gap-1.5 text-xs text-zinc-500">
             <ShieldCheck className="mt-px h-4 w-4 shrink-0 text-accent" aria-hidden />

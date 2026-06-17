@@ -53,7 +53,7 @@ export default async function LocaleLayout({
           <LocationProvider initial={initialLocation}>
             <Header />
             <HomeOnly>
-              <HeroBanner locale={locale} />
+              <HeroBanner />
             </HomeOnly>
             <main className="mx-auto min-h-[60vh] max-w-7xl px-4 py-8">
               <CategoryMenu />
