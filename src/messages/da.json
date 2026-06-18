@@ -1,0 +1,93 @@
+{
+  "home": {
+    "heroTitle": "Find <em>ægte</em> tilbud, ikke falske rabatter",
+    "heroSubtitle": "Følg prisfald, sammenlign prishistorik, og gå direkte til betroede forhandlere.",
+    "heroDisclosure": "Vi sælger ikke produkter direkte — vi hjælper dig med at finde verificerede tilbud og sender dig videre til betroede forhandlere.",
+    "heroCta": "Søg",
+    "topDeals": "Bedste tilbud i {country}",
+    "noDeals": "Der er endnu ingen tilbud for din placering. Kom snart tilbage."
+  },
+  "categories": {
+    "heading": "Gennemse efter kategori",
+    "electronics": "Elektronik",
+    "fashion": "Mode",
+    "home-garden": "Hjem & have",
+    "sports": "Sport",
+    "beauty": "Skønhed",
+    "food-grocery": "Dagligvarer",
+    "toys": "Legetøj",
+    "automotive": "Bil",
+    "books": "Bøger",
+    "travel": "Rejser"
+  },
+  "deal": {
+    "goToDeal": "Se tilbud",
+    "sponsored": "Sponsoreret",
+    "priceHistory": "Pris · seneste 3 måneder",
+    "today": "I dag",
+    "close": "Luk",
+    "sizes": "Størrelser",
+    "details": "Produktdetaljer"
+  },
+  "alert": {
+    "button": "Få besked om bedste pris",
+    "emailPlaceholder": "din@email.com",
+    "submit": "Giv mig besked",
+    "success": "Færdig! Vi sender dig en e-mail, når prisen falder.",
+    "invalidEmail": "Indtast en gyldig e-mailadresse.",
+    "errorGeneric": "Noget gik galt. Prøv igen."
+  },
+  "search": {
+    "placeholder": "Søg efter produkter, mærker…",
+    "products": "Produkter",
+    "categories": "Kategorier",
+    "brands": "Mærker",
+    "seeAll": "Se alle resultater",
+    "resultsFor": "Resultater for “{q}”",
+    "allResults": "Alle tilbud",
+    "noResults": "Ingen tilbud matcher dine filtre. Prøv at udvide prisintervallet eller sænke minimumsrabatten."
+  },
+  "filters": {
+    "heading": "Filtre",
+    "sort": "Sortér efter",
+    "sortDiscount": "Største rabat",
+    "sortPriceAsc": "Pris: lav til høj",
+    "sortPriceDesc": "Pris: høj til lav",
+    "sortNewest": "Nyeste",
+    "category": "Kategori",
+    "allCategories": "Alle kategorier",
+    "brand": "Mærke",
+    "allBrands": "Alle mærker",
+    "priceRange": "Prisinterval",
+    "min": "Min",
+    "max": "Maks",
+    "minDiscount": "Minimumsrabat",
+    "apply": "Anvend filtre"
+  },
+  "geo": {
+    "promptTitle": "Vis tilbud i nærheden?",
+    "promptBody": "Tillad placeringsadgang for at se tilbud fra butikker i din by. Hvis du afviser, estimerer vi dit land ud fra din IP-adresse.",
+    "allow": "Tillad placering",
+    "useIpInstead": "Brug min IP i stedet",
+    "changeLocation": "Skift placering",
+    "country": "Land",
+    "cityOptional": "By (valgfrit)",
+    "cityPlaceholder": "f.eks. København",
+    "apply": "Anvend"
+  },
+  "gdpr": {
+    "bannerTitle": "Cookies på DealRadar",
+    "bannerBody": "Vi bruger nødvendige cookies til sprog og placering. Valgfrie cookies hjælper os med at forbedre siden med anonym brugsstatistik.",
+    "essentialOnly": "Kun nødvendige",
+    "acceptAll": "Accepter alle"
+  },
+  "nav": {
+    "openMenu": "Åbn menu",
+    "closeMenu": "Luk menu",
+    "subcategories": "underkategorier",
+    "brands": "Mærker"
+  },
+  "footer": {
+    "affiliateDisclosure": "DealRadar kan tjene en provision, når du køber via links på dette website — uden ekstra omkostninger for dig."
+  }
+}

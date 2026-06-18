@@ -21,9 +21,9 @@ export const COUNTRIES: CountryInfo[] = [
   { code: 'RO', name: 'Romania',        locale: 'ro', currency: 'RON' },
   { code: 'GB', name: 'United Kingdom', locale: 'en', currency: 'GBP' },
   { code: 'BE', name: 'Belgium',        locale: 'nl', currency: 'EUR' },
-  { code: 'DK', name: 'Denmark',        locale: 'en', currency: 'DKK' },
-  { code: 'FI', name: 'Finland',        locale: 'en', currency: 'EUR' },
-  { code: 'NO', name: 'Norway',         locale: 'en', currency: 'NOK' },
+  { code: 'DK', name: 'Denmark',        locale: 'da', currency: 'DKK' },
+  { code: 'FI', name: 'Finland',        locale: 'fi', currency: 'EUR' },
+  { code: 'NO', name: 'Norway',         locale: 'no', currency: 'NOK' },
   { code: 'CH', name: 'Switzerland',    locale: 'de', currency: 'CHF' },
 ];
 

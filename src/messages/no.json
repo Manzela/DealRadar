@@ -1,0 +1,93 @@
+{
+  "home": {
+    "heroTitle": "Finn <em>ekte</em> tilbud, ikke falske rabatter",
+    "heroSubtitle": "Følg prisfall, sammenlign prishistorikk, og gå direkte til pålitelige forhandlere.",
+    "heroDisclosure": "Vi selger ikke produkter direkte — vi hjelper deg å finne verifiserte tilbud og sender deg videre til pålitelige forhandlere.",
+    "heroCta": "Søk",
+    "topDeals": "Beste tilbud i {country}",
+    "noDeals": "Ingen tilbud for din plassering ennå. Kom tilbake snart."
+  },
+  "categories": {
+    "heading": "Bla gjennom etter kategori",
+    "electronics": "Elektronikk",
+    "fashion": "Mote",
+    "home-garden": "Hjem og hage",
+    "sports": "Sport",
+    "beauty": "Skjønnhet",
+    "food-grocery": "Dagligvarer",
+    "toys": "Leker",
+    "automotive": "Bil",
+    "books": "Bøker",
+    "travel": "Reise"
+  },
+  "deal": {
+    "goToDeal": "Se tilbud",
+    "sponsored": "Sponset",
+    "priceHistory": "Pris · siste 3 måneder",
+    "today": "I dag",
+    "close": "Lukk",
+    "sizes": "Størrelser",
+    "details": "Produktdetaljer"
+  },
+  "alert": {
+    "button": "Få varsel om beste pris",
+    "emailPlaceholder": "din@epost.no",
+    "submit": "Varsle meg",
+    "success": "Ferdig! Vi sender deg en e-post når prisen faller.",
+    "invalidEmail": "Skriv inn en gyldig e-postadresse.",
+    "errorGeneric": "Noe gikk galt. Prøv igjen."
+  },
+  "search": {
+    "placeholder": "Søk etter produkter, merker…",
+    "products": "Produkter",
+    "categories": "Kategorier",
+    "brands": "Merker",
+    "seeAll": "Se alle resultater",
+    "resultsFor": "Resultater for «{q}»",
+    "allResults": "Alle tilbud",
+    "noResults": "Ingen tilbud samsvarer med filtrene dine. Prøv å utvide prisintervallet eller senke minimumsrabatten."
+  },
+  "filters": {
+    "heading": "Filtre",
+    "sort": "Sorter etter",
+    "sortDiscount": "Størst rabatt",
+    "sortPriceAsc": "Pris: lav til høy",
+    "sortPriceDesc": "Pris: høy til lav",
+    "sortNewest": "Nyeste",
+    "category": "Kategori",
+    "allCategories": "Alle kategorier",
+    "brand": "Merke",
+    "allBrands": "Alle merker",
+    "priceRange": "Prisintervall",
+    "min": "Min",
+    "max": "Maks",
+    "minDiscount": "Minimumsrabatt",
+    "apply": "Bruk filtre"
+  },
+  "geo": {
+    "promptTitle": "Vise tilbud i nærheten?",
+    "promptBody": "Tillat plasseringstilgang for å se tilbud fra butikker i byen din. Hvis du avslår, anslår vi landet ditt ut fra IP-adressen din.",
+    "allow": "Tillat plassering",
+    "useIpInstead": "Bruk IP-en min i stedet",
+    "changeLocation": "Endre plassering",
+    "country": "Land",
+    "cityOptional": "By (valgfritt)",
+    "cityPlaceholder": "f.eks. Oslo",
+    "apply": "Bruk"
+  },
+  "gdpr": {
+    "bannerTitle": "Informasjonskapsler på DealRadar",
+    "bannerBody": "Vi bruker nødvendige informasjonskapsler for språk og plassering. Valgfrie informasjonskapsler hjelper oss å forbedre nettstedet med anonym bruksstatistikk.",
+    "essentialOnly": "Kun nødvendige",
+    "acceptAll": "Godta alle"
+  },
+  "nav": {
+    "openMenu": "Åpne meny",
+    "closeMenu": "Lukk meny",
+    "subcategories": "underkategorier",
+    "brands": "Merker"
+  },
+  "footer": {
+    "affiliateDisclosure": "DealRadar kan tjene en provisjon når du kjøper via lenker på dette nettstedet — uten ekstra kostnad for deg."
+  }
+}

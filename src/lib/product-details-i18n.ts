@@ -73,14 +73,76 @@ const SPEC_VALUES: Record<string, T> = {
   'in stock': { de: 'auf Lager', es: 'en stock', fr: 'en stock', it: 'disponibili', nl: 'op voorraad', pl: 'w magazynie', pt: 'em stock', sv: 'i lager', ro: 'în stoc' },
 };
 
+type DFN = { da: string; fi: string; no: string };
+
+/** Danish / Finnish / Norwegian spec labels (base maps cover the other 9). */
+const NORDIC_LABELS: Record<string, DFN> = {
+  'Brand': { da: 'Mærke', fi: 'Merkki', no: 'Merke' },
+  'Model': { da: 'Model', fi: 'Malli', no: 'Modell' },
+  'Color': { da: 'Farve', fi: 'Väri', no: 'Farge' },
+  'Condition': { da: 'Stand', fi: 'Kunto', no: 'Tilstand' },
+  'Warranty': { da: 'Garanti', fi: 'Takuu', no: 'Garanti' },
+  'Weight': { da: 'Vægt', fi: 'Paino', no: 'Vekt' },
+  'Availability': { da: 'Tilgængelighed', fi: 'Saatavuus', no: 'Tilgjengelighet' },
+  'Screen size': { da: 'Skærmstørrelse', fi: 'Näytön koko', no: 'Skjermstørrelse' },
+  'Resolution': { da: 'Opløsning', fi: 'Tarkkuus', no: 'Oppløsning' },
+  'Refresh rate': { da: 'Opdateringshastighed', fi: 'Virkistystaajuus', no: 'Oppdateringsfrekvens' },
+  'Panel': { da: 'Panel', fi: 'Paneeli', no: 'Panel' },
+  'Connectivity': { da: 'Forbindelse', fi: 'Liitännät', no: 'Tilkobling' },
+  'HDMI ports': { da: 'HDMI-porte', fi: 'HDMI-portit', no: 'HDMI-porter' },
+  'USB ports': { da: 'USB-porte', fi: 'USB-portit', no: 'USB-porter' },
+  'Battery life': { da: 'Batterilevetid', fi: 'Akunkesto', no: 'Batterilevetid' },
+  'Power': { da: 'Effekt', fi: 'Teho', no: 'Effekt' },
+  'Energy class': { da: 'Energiklasse', fi: 'Energialuokka', no: 'Energiklasse' },
+  'Operating system': { da: 'Styresystem', fi: 'Käyttöjärjestelmä', no: 'Operativsystem' },
+  'Voice control': { da: 'Stemmestyring', fi: 'Ääniohjaus', no: 'Stemmestyring' },
+  'Smart features': { da: 'Smart-funktioner', fi: 'Älyominaisuudet', no: 'Smartfunksjoner' },
+  'Material': { da: 'Materiale', fi: 'Materiaali', no: 'Materiale' },
+  'Dimensions': { da: 'Mål', fi: 'Mitat', no: 'Mål' },
+  'Country of origin': { da: 'Oprindelsesland', fi: 'Alkuperämaa', no: 'Opprinnelsesland' },
+  'Returns': { da: 'Returnering', fi: 'Palautukset', no: 'Retur' },
+  'Shipping': { da: 'Levering', fi: 'Toimitus', no: 'Frakt' },
+};
+
+/** Danish / Finnish / Norwegian spec values. */
+const NORDIC_VALUES: Record<string, DFN> = {
+  'Black': { da: 'Sort', fi: 'Musta', no: 'Svart' },
+  'White': { da: 'Hvid', fi: 'Valkoinen', no: 'Hvit' },
+  'Silver': { da: 'Sølv', fi: 'Hopea', no: 'Sølv' },
+  'Graphite': { da: 'Grafit', fi: 'Grafiitti', no: 'Grafitt' },
+  'Blue': { da: 'Blå', fi: 'Sininen', no: 'Blå' },
+  'Green': { da: 'Grøn', fi: 'Vihreä', no: 'Grønn' },
+  'Red': { da: 'Rød', fi: 'Punainen', no: 'Rød' },
+  'New': { da: 'Ny', fi: 'Uusi', no: 'Ny' },
+  '1 year': { da: '1 år', fi: '1 vuosi', no: '1 år' },
+  '2 years': { da: '2 år', fi: '2 vuotta', no: '2 år' },
+  '3 years': { da: '3 år', fi: '3 vuotta', no: '3 år' },
+  'Aluminium': { da: 'Aluminium', fi: 'Alumiini', no: 'Aluminium' },
+  'Plastic': { da: 'Plast', fi: 'Muovi', no: 'Plast' },
+  'Steel': { da: 'Stål', fi: 'Teräs', no: 'Stål' },
+  'Composite': { da: 'Komposit', fi: 'Komposiitti', no: 'Kompositt' },
+  'Germany': { da: 'Tyskland', fi: 'Saksa', no: 'Tyskland' },
+  'China': { da: 'Kina', fi: 'Kiina', no: 'Kina' },
+  'Poland': { da: 'Polen', fi: 'Puola', no: 'Polen' },
+  'Vietnam': { da: 'Vietnam', fi: 'Vietnam', no: 'Vietnam' },
+  'Czechia': { da: 'Tjekkiet', fi: 'Tšekki', no: 'Tsjekkia' },
+  'Proprietary': { da: 'Proprietært', fi: 'Suljettu', no: 'Proprietært' },
+  'Both': { da: 'Begge', fi: 'Molemmat', no: 'Begge' },
+  'Yes': { da: 'Ja', fi: 'Kyllä', no: 'Ja' },
+  'No': { da: 'Nej', fi: 'Ei', no: 'Nei' },
+  'Free': { da: 'Gratis', fi: 'Ilmainen', no: 'Gratis' },
+  '30-day free returns': { da: '30 dages gratis returnering', fi: '30 päivän ilmainen palautus', no: '30 dagers gratis retur' },
+  'in stock': { da: 'på lager', fi: 'varastossa', no: 'på lager' },
+};
+
 /** Localized spec label; falls back to English. */
 export function specLabel(label: string, locale: string): string {
   if (locale === 'en') return label;
-  return SPEC_LABELS[label]?.[locale as Locale] ?? label;
+  return SPEC_LABELS[label]?.[locale as Locale] ?? NORDIC_LABELS[label]?.[locale as 'da' | 'fi' | 'no'] ?? label;
 }
 
 /** Localized spec value (textual ones); numbers/units/brands fall back to English. */
 export function specValue(value: string, locale: string): string {
   if (locale === 'en') return value;
-  return SPEC_VALUES[value]?.[locale as Locale] ?? value;
+  return SPEC_VALUES[value]?.[locale as Locale] ?? NORDIC_VALUES[value]?.[locale as 'da' | 'fi' | 'no'] ?? value;
 }

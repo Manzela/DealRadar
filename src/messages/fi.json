@@ -1,0 +1,93 @@
+{
+  "home": {
+    "heroTitle": "Löydä <em>aitoja</em> tarjouksia, ei valealennuksia",
+    "heroSubtitle": "Seuraa hinnanlaskuja, vertaa hintahistoriaa ja siirry suoraan luotettuihin kauppoihin.",
+    "heroDisclosure": "Emme myy tuotteita suoraan — autamme sinua löytämään vahvistettuja tarjouksia ja ohjaamme sinut luotettaviin kauppoihin.",
+    "heroCta": "Hae",
+    "topDeals": "Parhaat tarjoukset – {country}",
+    "noDeals": "Sijainnillesi ei ole vielä tarjouksia. Tarkista pian uudelleen."
+  },
+  "categories": {
+    "heading": "Selaa kategorioittain",
+    "electronics": "Elektroniikka",
+    "fashion": "Muoti",
+    "home-garden": "Koti ja puutarha",
+    "sports": "Urheilu",
+    "beauty": "Kauneus",
+    "food-grocery": "Päivittäistavarat",
+    "toys": "Lelut",
+    "automotive": "Autoilu",
+    "books": "Kirjat",
+    "travel": "Matkailu"
+  },
+  "deal": {
+    "goToDeal": "Katso tarjous",
+    "sponsored": "Mainostettu",
+    "priceHistory": "Hinta · viimeiset 3 kuukautta",
+    "today": "Tänään",
+    "close": "Sulje",
+    "sizes": "Koot",
+    "details": "Tuotetiedot"
+  },
+  "alert": {
+    "button": "Saa ilmoitus parhaasta hinnasta",
+    "emailPlaceholder": "sinun@email.fi",
+    "submit": "Ilmoita minulle",
+    "success": "Valmis! Lähetämme sinulle sähköpostia, kun hinta laskee.",
+    "invalidEmail": "Anna kelvollinen sähköpostiosoite.",
+    "errorGeneric": "Jokin meni pieleen. Yritä uudelleen."
+  },
+  "search": {
+    "placeholder": "Hae tuotteita, merkkejä…",
+    "products": "Tuotteet",
+    "categories": "Kategoriat",
+    "brands": "Merkit",
+    "seeAll": "Näytä kaikki tulokset",
+    "resultsFor": "Tulokset haulle ”{q}”",
+    "allResults": "Kaikki tarjoukset",
+    "noResults": "Mikään tarjous ei vastaa suodattimiasi. Kokeile laajentaa hintaväliä tai laskea vähimmäisalennusta."
+  },
+  "filters": {
+    "heading": "Suodattimet",
+    "sort": "Lajittele",
+    "sortDiscount": "Suurin alennus",
+    "sortPriceAsc": "Hinta: halvin ensin",
+    "sortPriceDesc": "Hinta: kallein ensin",
+    "sortNewest": "Uusimmat",
+    "category": "Kategoria",
+    "allCategories": "Kaikki kategoriat",
+    "brand": "Merkki",
+    "allBrands": "Kaikki merkit",
+    "priceRange": "Hintaväli",
+    "min": "Min",
+    "max": "Maks",
+    "minDiscount": "Vähimmäisalennus",
+    "apply": "Käytä suodattimia"
+  },
+  "geo": {
+    "promptTitle": "Näytetäänkö tarjoukset lähelläsi?",
+    "promptBody": "Salli sijainnin käyttö nähdäksesi tarjouksia kaupunkisi kaupoista. Jos kieltäydyt, arvioimme maasi IP-osoitteesi perusteella.",
+    "allow": "Salli sijainti",
+    "useIpInstead": "Käytä IP-osoitettani",
+    "changeLocation": "Vaihda sijaintia",
+    "country": "Maa",
+    "cityOptional": "Kaupunki (valinnainen)",
+    "cityPlaceholder": "esim. Helsinki",
+    "apply": "Käytä"
+  },
+  "gdpr": {
+    "bannerTitle": "Evästeet DealRadarissa",
+    "bannerBody": "Käytämme välttämättömiä evästeitä kieltä ja sijaintia varten. Valinnaiset evästeet auttavat meitä parantamaan sivustoa anonyymien käyttötilastojen avulla.",
+    "essentialOnly": "Vain välttämättömät",
+    "acceptAll": "Hyväksy kaikki"
+  },
+  "nav": {
+    "openMenu": "Avaa valikko",
+    "closeMenu": "Sulje valikko",
+    "subcategories": "alakategoriat",
+    "brands": "Merkit"
+  },
+  "footer": {
+    "affiliateDisclosure": "DealRadar voi ansaita komission, kun ostat tämän sivuston linkkien kautta — ilman lisäkustannuksia sinulle."
+  }
+}

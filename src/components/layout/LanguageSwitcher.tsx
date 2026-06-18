@@ -8,6 +8,7 @@ import { Globe } from 'lucide-react';
 const LABELS: Record<string, string> = {
   en: 'English', de: 'Deutsch', fr: 'Français', es: 'Español', it: 'Italiano',
   pl: 'Polski', nl: 'Nederlands', pt: 'Português', sv: 'Svenska', ro: 'Română',
+  da: 'Dansk', fi: 'Suomi', no: 'Norsk',
 };
 
 export function LanguageSwitcher() {
