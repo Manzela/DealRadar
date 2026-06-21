@@ -21,7 +21,7 @@
     "travel": "Resor"
   },
   "deal": {
-    "goToDeal": "Till erbjudandet",
+    "goToDeal": "Se hos <chip>{shop}</chip>",
     "sponsored": "Sponsrad",
     "priceHistory": "Pris · senaste 3 månaderna",
     "today": "Idag",

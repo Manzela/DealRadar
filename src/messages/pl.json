@@ -21,7 +21,7 @@
     "travel": "Podróże"
   },
   "deal": {
-    "goToDeal": "Zobacz okazję",
+    "goToDeal": "Zobacz w <chip>{shop}</chip>",
     "sponsored": "Sponsorowane",
     "priceHistory": "Cena · ostatnie 3 miesiące",
     "today": "Dziś",

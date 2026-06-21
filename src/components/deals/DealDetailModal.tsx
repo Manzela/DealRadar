@@ -16,6 +16,7 @@ import { PriceAlertButton } from './PriceAlertButton';
 import { formatPrice, formatDiscount } from '@/lib/utils/format';
 import { priceWindow, priceSeries } from '@/lib/utils/price-history';
 import { decorateAffiliateUrl } from '@/lib/utils/affiliate';
+import { displayShopName } from '@/lib/utils/shop';
 import { productGallery, productSpecs, productSizes } from '@/lib/utils/product-details';
 import type { NormalizedDeal } from '@/lib/providers/types';
 
@@ -110,7 +111,7 @@ export function DealDetailModal({ deal, onClose }: { deal: NormalizedDeal; onClo
             <h2 className="pr-8 text-lg font-semibold leading-snug text-zinc-900">{deal.productName}</h2>
             <p className="mt-1 text-sm text-zinc-500">
               {deal.brand ? `${deal.brand} · ` : ''}
-              {deal.shopName}
+              {displayShopName(deal.shopName)}
             </p>
 
             <div className="mt-3 flex items-baseline gap-2">
@@ -159,9 +160,14 @@ export function DealDetailModal({ deal, onClose }: { deal: NormalizedDeal; onClo
                 href={href}
                 target="_blank"
                 rel="noopener nofollow sponsored"
-                className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-accent text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+                className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-accent text-sm font-medium text-white transition-colors hover:bg-accent-hover"
               >
-                {t('goToDeal')}
+                {t.rich('goToDeal', {
+                  shop: displayShopName(deal.shopName),
+                  chip: (chunks) => (
+                    <span className="rounded-md bg-[#a0d6b4] px-2 py-1 font-semibold leading-none text-zinc-900">{chunks}</span>
+                  ),
+                })}
               </a>
               <PriceAlertButton
                 productId={deal.productId}

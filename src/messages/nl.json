@@ -21,7 +21,7 @@
     "travel": "Reizen"
   },
   "deal": {
-    "goToDeal": "Naar de deal",
+    "goToDeal": "Bekijk bij <chip>{shop}</chip>",
     "sponsored": "Gesponsord",
     "priceHistory": "Prijs · laatste 3 maanden",
     "today": "Vandaag",

@@ -12,6 +12,7 @@ import { formatPrice, formatDiscount } from '@/lib/utils/format';
 import { priceWindow, priceSeries } from '@/lib/utils/price-history';
 import { productModel } from '@/lib/utils/product-details';
 import { decorateAffiliateUrl } from '@/lib/utils/affiliate';
+import { displayShopName } from '@/lib/utils/shop';
 import type { NormalizedDeal } from '@/lib/providers/types';
 
 /**
@@ -62,7 +63,7 @@ export function DealCard({ deal, priority = false }: { deal: NormalizedDeal; pri
             // eslint-disable-next-line @next/next/no-img-element -- tiny logos, arbitrary hosts
             <img src={deal.shopLogoUrl} alt="" className="h-4 w-4 rounded-sm object-contain" />
           )}
-          <span>{deal.shopName}</span>
+          <span>{displayShopName(deal.shopName)}</span>
           <span aria-hidden>·</span>
           <span className="text-zinc-400">{productModel(deal)}</span>
         </div>
@@ -89,9 +90,14 @@ export function DealCard({ deal, priority = false }: { deal: NormalizedDeal; pri
           href={href}
           target="_blank"
           rel="noopener nofollow sponsored"
-          className="mt-2 inline-flex h-9 items-center justify-center rounded-lg bg-accent text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+          className="mt-2 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-accent text-sm font-medium text-white transition-colors hover:bg-accent-hover"
         >
-          {t('goToDeal')}
+          {t.rich('goToDeal', {
+            shop: displayShopName(deal.shopName),
+            chip: (chunks) => (
+              <span className="rounded-md bg-[#a0d6b4] px-2 py-1 font-semibold leading-none text-zinc-900">{chunks}</span>
+            ),
+          })}
         </a>
 
         <PriceAlertButton

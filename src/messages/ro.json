@@ -21,7 +21,7 @@
     "travel": "Călătorii"
   },
   "deal": {
-    "goToDeal": "Vezi oferta",
+    "goToDeal": "Vezi pe <chip>{shop}</chip>",
     "sponsored": "Sponsorizat",
     "priceHistory": "Preț · ultimele 3 luni",
     "today": "Azi",

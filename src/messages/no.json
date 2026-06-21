@@ -21,7 +21,7 @@
     "travel": "Reise"
   },
   "deal": {
-    "goToDeal": "Se tilbud",
+    "goToDeal": "Se hos <chip>{shop}</chip>",
     "sponsored": "Sponset",
     "priceHistory": "Pris · siste 3 måneder",
     "today": "I dag",

@@ -21,7 +21,7 @@
     "travel": "Matkailu"
   },
   "deal": {
-    "goToDeal": "Katso tarjous",
+    "goToDeal": "Katso kaupassa <chip>{shop}</chip>",
     "sponsored": "Mainostettu",
     "priceHistory": "Hinta · viimeiset 3 kuukautta",
     "today": "Tänään",

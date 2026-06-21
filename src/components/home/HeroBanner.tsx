@@ -15,11 +15,11 @@ export async function HeroBanner() {
 
   return (
     <section className="mx-auto max-w-7xl px-4 pt-8">
+      {/* Light peach card — keeps the radar's round, light-orange dish clearly
+          readable (a strong orange glow washes the circle out, leaving only the
+          dark sweep wedge, so we keep the background light here). */}
       <div className="rounded-2xl border border-orange-100 bg-gradient-to-br from-[#FFF7F1] via-[#FFF0E6] to-[#FFE6D5]">
-        {/* md:pr-[50px] = the radar's distance from the banner's RIGHT edge.
-            Change that one value to move the radar horizontally (it's anchored
-            to the edge, so it stays consistent at every screen width). */}
-        <div className="grid items-stretch gap-6 px-6 py-[30px] md:grid-cols-[1fr_1fr] md:pl-10 md:pr-[50px]">
+        <div className="grid items-stretch gap-6 px-6 py-[30px] md:grid-cols-[1fr_1fr] md:px-10">
           <div>
             <h1 className="text-3xl font-bold leading-tight tracking-tight text-zinc-900 sm:text-4xl">
               {t.rich('home.heroTitle', {
@@ -45,14 +45,27 @@ export async function HeroBanner() {
               cell's right edge, so the md:pr-[50px] above is its exact, screen-
               width-independent gap from the banner border. object-contain = 1:1. */}
           <div className="relative -my-[30px] hidden md:block">
-            <Image
-              src="/hero-illustration.png"
-              alt=""
-              fill
-              sizes="400px"
-              priority
-              className="object-contain object-right"
-            />
+            {/* Square radar centered in the right column (i.e. between the
+                search button and the banner's right edge) at full banner
+                height. The discount badges live INSIDE this square so they
+                track the radar at every screen size. Radar PNG is label-free
+                (scripts/strip-labels.cjs) — the badges are real HTML now, so
+                they're crisp and consistent (no baked-in white-hole artifacts). */}
+            <div className="absolute inset-y-0 left-1/2 aspect-square -translate-x-1/2">
+              <Image
+                src="/hero-radar.png"
+                alt=""
+                fill
+                sizes="400px"
+                priority
+                className="object-contain"
+              />
+              {/* Badges spread around the dish (top, right, lower-left). Tune
+                  each one's two position utilities to taste. */}
+              <span className="absolute left-[44%] top-[4%] -translate-x-1/2 rounded-lg bg-accent px-2.5 py-1 text-sm font-bold text-white shadow-md">-70%</span>
+              <span className="absolute right-[-2%] top-[44%] rounded-lg bg-accent px-2.5 py-1 text-sm font-bold text-white shadow-md">-50%</span>
+              <span className="absolute bottom-[12%] left-[6%] rounded-lg bg-accent px-2.5 py-1 text-sm font-bold text-white shadow-md">-30%</span>
+            </div>
           </div>
         </div>
       </div>
