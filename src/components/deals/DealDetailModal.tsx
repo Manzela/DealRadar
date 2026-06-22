@@ -73,14 +73,14 @@ export function DealDetailModal({ deal, onClose }: { deal: NormalizedDeal; onClo
         <div className="grid gap-6 md:shrink-0 md:grid-cols-2">
           {/* Gallery — top-left */}
           <div>
-            <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-zinc-50">
+            <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-white">
               {gallery[active] && (
                 <Image
                   src={gallery[active]}
                   alt={deal.productName}
                   fill
                   sizes="(max-width: 768px) 90vw, 360px"
-                  className="object-cover"
+                  className="object-contain p-4"
                 />
               )}
               <Badge variant="deal" className="absolute left-2 top-2 text-sm">
@@ -95,11 +95,11 @@ export function DealDetailModal({ deal, onClose }: { deal: NormalizedDeal; onClo
                     type="button"
                     onClick={() => setActive(i)}
                     aria-label={`${deal.productName} ${i + 1}`}
-                    className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 transition-colors ${
+                    className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 bg-white transition-colors ${
                       i === active ? 'border-accent' : 'border-zinc-200 hover:border-zinc-300'
                     }`}
                   >
-                    <Image src={src} alt="" fill sizes="64px" className="object-cover" />
+                    <Image src={src} alt="" fill sizes="64px" className="object-contain p-1" />
                   </button>
                 ))}
               </div>

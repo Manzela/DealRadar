@@ -11,6 +11,7 @@ import {
   computeDiscountPercent,
 } from './types';
 import { queryTokens } from '../utils/search-tokens';
+import { mockImage } from '../utils/mock-images';
 
 const PRODUCTS: Record<CategorySlug, { names: string[]; brands: string[]; base: [number, number] }> = {
   electronics: {
@@ -121,7 +122,7 @@ export function generateMockDeals(providerId: string, query: DealQuery): Normali
         currency,
         category,
         brand,
-        imageUrl: `https://picsum.photos/seed/${providerId}-${category}-${i}/480/360`,
+        imageUrl: mockImage(`${providerId}-${category}-${i}`, category),
         country: query.country,
         city: null,
         isSponsored: true,

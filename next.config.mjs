@@ -7,7 +7,7 @@ const nextConfig = {
   images: {
     // Provider CDNs vary per network; tighten this list once live feeds are on.
     remotePatterns: [
-      { protocol: 'https', hostname: 'picsum.photos' },        // mock images
+      { protocol: 'https', hostname: 'cdn.dummyjson.com' },    // mock product images
       { protocol: 'https', hostname: '**.kelkoogroup.net' },
       { protocol: 'https', hostname: '**.awin1.com' },
       { protocol: 'https', hostname: '**.tradedoubler.com' },

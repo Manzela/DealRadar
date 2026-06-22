@@ -32,7 +32,7 @@ export function DealCard({ deal, priority = false }: { deal: NormalizedDeal; pri
         type="button"
         onClick={() => setOpen(true)}
         aria-label={deal.productName}
-        className="relative block aspect-[4/3] w-full bg-zinc-50 text-left"
+        className="relative block aspect-[4/3] w-full bg-white text-left"
       >
         {deal.imageUrl ? (
           <Image
@@ -41,7 +41,7 @@ export function DealCard({ deal, priority = false }: { deal: NormalizedDeal; pri
             fill
             priority={priority}
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-            className="object-cover"
+            className="object-contain p-3"
           />
         ) : (
           <span className="flex h-full items-center justify-center text-zinc-300">—</span>

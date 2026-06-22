@@ -8,6 +8,7 @@
  */
 import type { NormalizedDeal } from '../providers/types';
 import { specLabel, specValue } from '../product-details-i18n';
+import { mockImages } from './mock-images';
 
 function seeded(seed: string): () => number {
   let h = 2166136261;
@@ -24,10 +25,9 @@ function seeded(seed: string): () => number {
 
 const pick = <T>(arr: T[], r: () => number): T => arr[Math.floor(r() * arr.length)];
 
-/** Main image + a few seeded variants for the gallery. */
+/** Main image + a few category-matched variants for the gallery. */
 export function productGallery(deal: NormalizedDeal): string[] {
-  const seed = encodeURIComponent(deal.productId);
-  const variants = [1, 2, 3].map((n) => `https://picsum.photos/seed/${seed}-${n}/600/450`);
+  const variants = mockImages(`${deal.productId}-gallery`, 3, deal.category);
   return [deal.imageUrl, ...variants].filter((u): u is string => Boolean(u));
 }
 
