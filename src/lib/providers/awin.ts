@@ -1,21 +1,26 @@
 /**
- * AWIN product feed provider — SECONDARY source.
+ * AWIN provider — feed-ingested, NOT a per-query search API.
  *
- * Registration: https://www.awin.com → "Publishers" sign-up (small refundable
- * deposit). Then: Toolbox → Create-a-Feed / Product Feed API to get your feed
- * list URL and API key, and join advertiser programmes per country.
- * Docs: https://wiki.awin.com/index.php/Product_Feeds
+ * AWIN distributes one large combined PRODUCT FEED (gzipped CSV, ~300 MB), not a
+ * search endpoint, so it cannot be pulled per request like Kelkoo/DummyJSON.
+ * Instead a scheduled job (`scripts/ingest-awin.cjs`) downloads the feed, keeps
+ * the genuine in-stock discounts, and upserts them into Supabase. The app then
+ * reads those rows from the `deals` table like any other deal.
  *
- * AWIN serves large CSV/JSON feeds rather than a search API, so this provider
- * pulls a feed page and filters by discount. For production, schedule the cron
- * refresh frequently enough (≤30 min) and consider downloading delta feeds.
+ * Consequently this provider does NOT fetch on the per-query path:
+ *  - no AWIN_FEED_URL → mock data (so dev/preview still shows AWIN-labelled deals),
+ *  - AWIN_FEED_URL set → returns [] here (the real deals arrive via ingestion).
+ *
+ * Setup: register at https://www.awin.com (publisher, small refundable deposit),
+ * join advertiser programmes, then Toolbox → Create-a-Feed to get the datafeed
+ * download URL. Put it in AWIN_FEED_URL (the URL embeds your API key — keep it
+ * secret) and run the ingestion script on a schedule. See scripts/ingest-awin.cjs.
  */
 import {
   type CountryCode, type DealQuery, type NormalizedDeal, type PriceProvider,
-  type ProviderHealth, ProviderError, computeDiscountPercent,
+  type ProviderHealth,
 } from './types';
 import { generateMockDeals } from './mock-data';
-import { mapExternalCategory } from './category-map';
 
 export class AwinProvider implements PriceProvider {
   readonly id = 'awin';
@@ -23,67 +28,22 @@ export class AwinProvider implements PriceProvider {
   readonly supportedCountries: CountryCode[] = ['DE','AT','FR','ES','IT','PL','NL','SE','GB','BE','DK','FI','NO','CH'];
   readonly priority = 20;
 
-  private apiKey = process.env.AWIN_API_KEY ?? '';
-  private publisherId = process.env.AWIN_PUBLISHER_ID ?? '';
-  private mock = false;
+  private feedConfigured = Boolean(process.env.AWIN_FEED_URL);
 
   async init(): Promise<ProviderHealth> {
-    if (!this.apiKey || !this.publisherId) {
-      this.mock = true;
+    if (!this.feedConfigured) {
       const message =
-        'AWIN_API_KEY / AWIN_PUBLISHER_ID not set — using mock data. Apply at https://www.awin.com (publisher sign-up), then create an API key under Toolbox → API Credentials.';
+        'AWIN_FEED_URL not set — using mock data. Get a datafeed download URL from AWIN (Toolbox → Create-a-Feed), set AWIN_FEED_URL, and run scripts/ingest-awin.cjs on a schedule.';
       console.warn(`[awin] ${message}`);
       return { ok: true, isMock: true, message };
     }
-    return { ok: true, isMock: false };
+    // Feed configured: deals are ingested into Supabase out of band, so the
+    // per-query path has nothing live to add (fetchDeals returns []).
+    return { ok: true, isMock: false, message: 'AWIN is feed-ingested via scripts/ingest-awin.cjs → Supabase.' };
   }
 
   async fetchDeals(query: DealQuery): Promise<NormalizedDeal[]> {
-    if (this.mock) return generateMockDeals(this.id, query);
-
-    /*
-     * MISSING / INTENTIONALLY FLAGGED:
-     * AWIN's product data is delivered as per-advertiser feed downloads
-     * (datafeed_api endpoints with a feed list per joined programme), not a
-     * cross-advertiser search endpoint. A faithful implementation needs:
-     *   1. GET the feed list (CSV) using the API key,
-     *   2. download per-advertiser feeds for the target country,
-     *   3. stream-parse and filter rows where search_price < rrp_price.
-     * That is an offline ingestion job (several hundred MB), out of scope for a
-     * synchronous fetch. Until the ingestion worker exists, live AWIN mode
-     * fails loudly instead of pretending.
-     */
-    throw new ProviderError(
-      this.id, false,
-      'Live AWIN mode requires the feed-ingestion worker (see comment in awin.ts). Unset AWIN_API_KEY to use mock data, or implement the worker.',
-    );
+    if (!this.feedConfigured) return generateMockDeals(this.id, query);
+    return []; // live AWIN deals come from the ingestion job, not this code path
   }
-}
-
-// Re-exported so the (future) ingestion worker normalizes rows identically.
-export function normalizeAwinRow(row: Record<string, string>, country: CountryCode): NormalizedDeal | null {
-  const sale = parseFloat(row['search_price']);
-  const original = parseFloat(row['rrp_price'] || row['search_price']);
-  if (!Number.isFinite(sale)) return null;
-  const discountPercent = computeDiscountPercent(original, sale);
-  if (discountPercent === 0) return null;
-  return {
-    productId: `awin:${row['aw_product_id']}`,
-    productName: row['product_name'],
-    shopName: row['merchant_name'],
-    shopUrl: row['aw_deep_link'],
-    shopLogoUrl: null,
-    originalPrice: original,
-    salePrice: sale,
-    discountPercent,
-    currency: row['currency'] || 'EUR',
-    category: mapExternalCategory(row['merchant_category'] ?? ''),
-    brand: row['brand_name'] || null,
-    imageUrl: row['merchant_image_url'] || null,
-    country,
-    city: null,
-    isSponsored: true,
-    source: 'awin',
-    lastUpdated: new Date().toISOString(),
-  };
 }

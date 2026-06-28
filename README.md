@@ -22,7 +22,7 @@ See `.env.example` for the full annotated list. Summary:
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Deals persistence (server-only key) |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | 30-min response cache |
 | `KELKOO_API_TOKEN` | Primary live provider (per-country JWT from Kelkoo Publisher Center) |
-| `AWIN_API_KEY`, `AWIN_PUBLISHER_ID` | Secondary provider (see "AWIN gap" below) |
+| `AWIN_FEED_URL` | Secondary provider — datafeed download URL, ingested on a schedule (see "AWIN feed" below). The URL embeds the API key — keep secret. |
 | `TRADEDOUBLER_TOKEN` | Tertiary provider |
 | `IDEALO_API_KEY` | Reserved — no self-service API exists; stays mock |
 | `CRON_SECRET` | Bearer auth for `POST /api/refresh` |
@@ -34,6 +34,19 @@ Run `supabase/schema.sql` in the Supabase SQL editor. It creates the `deals` tab
 ## Data refresh
 
 `POST /api/refresh` with `Authorization: Bearer $CRON_SECRET` fans out across all supported countries × categories, pulls from providers in priority order, and upserts into Supabase. `docker-compose.yml` includes a curl sidecar that hits it every 15 minutes. On Vercel, use a Vercel Cron job instead.
+
+### AWIN feed
+
+AWIN is the exception: it serves one large combined product feed (gzipped CSV, ~300 MB), not a per-query search API, so it is **not** part of `/api/refresh`. Instead set `AWIN_FEED_URL` and run the standalone ingestion on a schedule:
+
+```bash
+node scripts/ingest-awin.cjs            # dry-run: download, filter, print a summary
+node scripts/ingest-awin.cjs --upsert   # upsert genuine in-stock discounts into Supabase
+```
+
+It streams the feed, keeps rows where `search_price < rrp_price` (or `product_price_old`) and `in_stock=1`, normalises them (AWIN deep link as the CTA, `category_name` → our slug), and batch-upserts to `deals`. Dependency-free (Node built-ins + Supabase REST), so a GitHub Action / cron runner needs no install.
+
+A scheduled GitHub Action runs it daily (03:00 UTC): [`.github/workflows/ingest-awin.yml`](.github/workflows/ingest-awin.yml). Add three repo secrets (Settings → Secrets and variables → Actions): `AWIN_FEED_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. Trigger a manual run (with an optional dry-run toggle) from the Actions tab.
 
 ## Adding a new price provider
 
@@ -51,7 +64,7 @@ That's it — fall-through, dedup, caching, and persistence are handled by the r
 ## Known gaps / TODO before production
 
 - **Translations:** only `en` and `de` are real. `fr`, `es`, `it`, `pl`, `nl`, `pt`, `sv`, `ro` are English stubs that need translation.
-- **AWIN gap:** AWIN distributes per-advertiser product feeds (CSV), not a search API. The live path in `src/lib/providers/awin.ts` intentionally throws — a feed-ingestion worker is needed (download feeds on schedule, map rows via the exported `normalizeAwinRow()`, upsert to Supabase). Mock fallback works meanwhile.
+- **AWIN secrets:** the ingestion script and its scheduled Action (`.github/workflows/ingest-awin.yml`) are built and verified; they go live once the `AWIN_FEED_URL`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` repo secrets are set. Until then, `src/lib/providers/awin.ts` serves mock data when `AWIN_FEED_URL` is unset locally.
 - **Kelkoo response shape:** the offer-mapping interfaces were written from public docs; verify against a live response in requestbuilder.kelkoogroup.com once you have a token.
 - **Image domains:** `next.config.mjs` `remotePatterns` are permissive for the affiliate CDNs; tighten for production.
 - **Idealo:** no public publisher API — partnership only (idealo.de/partner). Provider remains mock.
