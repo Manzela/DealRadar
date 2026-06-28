@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 
 /**
  * Resolve the HMAC / cron signing secret at CALL time (never at module load) so

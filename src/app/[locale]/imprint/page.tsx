@@ -18,7 +18,7 @@ export async function generateMetadata({ params: { locale } }: { params: { local
   return { title: `${t('title')} · DealRadar` };
 }
 
-export default async function ImprintPage({ params: { locale } }: { params: { locale: string } }) {
+export default async function ImprintPage({ params: { locale } }: Readonly<{ params: { locale: string } }>) {
   setRequestLocale(locale);
   const t = await getTranslations({ locale, namespace: 'imprint' });
   return (

@@ -27,7 +27,16 @@ const PATTERN_KEYWORD = {
 };
 
 // objective tokens that justify an otherwise-flaggable acceptance line
-const OBJECTIVE = /(\d|HTTP|exit 0|exit code|grep|0 errors|0 critical|0 missing|<=|>=|<|>|WCAG|RLS|timingSafeEqual|notFound|404|401|400|429|200|InStock|NewCondition|AggregateOffer|itemCondition|List-Unsubscribe|nofollow|sponsored|hreflang|x-default|NOT NULL|FK|CHECK|EXPIRE|INCR|isMock|TTL|=)/i;
+// Split into low-complexity sub-patterns (digits already cover 404/401/200/"0 errors" …).
+const OBJECTIVE_PATTERNS = [
+  /\d|HTTP|grep|WCAG|RLS|=/i,
+  /<=|>=|<|>/,
+  /exit code|timingSafeEqual|notFound|isMock|TTL|EXPIRE|INCR/i,
+  /InStock|NewCondition|AggregateOffer|itemCondition/i,
+  /List-Unsubscribe|nofollow|sponsored|hreflang|x-default/i,
+  /NOT NULL|FK|CHECK/i,
+];
+const isObjective = (s) => OBJECTIVE_PATTERNS.some((re) => re.test(s));
 
 const reqIds = new Set(requirements.map((r) => r.id));
 const baseIds = new Set(baseline.map((b) => b.id));
@@ -44,7 +53,7 @@ for (const r of requirements) {
   for (const a of r.acceptance || []) {
     const lower = ' ' + a.toLowerCase() + ' ';
     for (const v of VAGUE) {
-      if (lower.includes(' ' + v + ' ') && !OBJECTIVE.test(a)) {
+      if (lower.includes(' ' + v + ' ') && !isObjective(a)) {
         E(`${r.id}: vague acceptance term '${v}' without an objective/numeric bound -> "${a}"`);
       }
     }
@@ -70,7 +79,7 @@ const taskIds = new Set(tasks.map((t) => t.id));
 for (const t of tasks) {
   if (!(t.requirements || []).length) E(`${t.id}: task maps to no requirement`);
   for (const rq of t.requirements || []) if (!reqIds.has(rq)) E(`${t.id}: dangling requirement ref ${rq}`);
-  if (!t.verification || !t.verification.trim()) E(`${t.id}: task names no verification`);
+  if (!t.verification?.trim()) E(`${t.id}: task names no verification`);
   for (const d of t.dependsOn || []) if (!taskIds.has(d)) E(`${t.id}: dangling dependsOn ${d}`);
 }
 
@@ -88,9 +97,11 @@ for (const t of tasks) for (const d of t.dependsOn || []) if (phaseOf.get(d) > t
 if (!tasks.some((t) => t.phase === 0)) E('no spine (phase 0) tasks defined');
 
 // ---- Report (exact counts) ----
-const byPrio = requirements.reduce((a, r) => ((a[r.priority] = (a[r.priority] || 0) + 1), a), {});
-const byPat = requirements.reduce((a, r) => ((a[r.pattern] = (a[r.pattern] || 0) + 1), a), {});
-const phases = [...new Set(tasks.map((t) => t.phase))].sort();
+const byPrio = {};
+for (const r of requirements) byPrio[r.priority] = (byPrio[r.priority] || 0) + 1;
+const byPat = {};
+for (const r of requirements) byPat[r.pattern] = (byPat[r.pattern] || 0) + 1;
+const phases = [...new Set(tasks.map((t) => t.phase))].sort((a, b) => a - b);
 
 console.log('================ DealRadar remediation plan — Tier-A validation ================');
 console.log(`baseline items : ${baseline.length}`);

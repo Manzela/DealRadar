@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
   let { error } = await supabase().from('transactions').upsert(row, { onConflict: 'transaction_id' });
   // FK guard: a postback can reference a product no longer in `deals`. Persist
   // the commission record with a null product_id rather than dropping it.
-  if (error && error.code === '23503' && productId) {
+  if (error?.code === '23503' && productId) {
     console.warn(`[postback] product_id ${productId} absent from deals — persisting with null FK`);
     ({ error } = await supabase()
       .from('transactions')

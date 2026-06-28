@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { routing } from '@/i18n/routing';
 
 interface Props {
-  params: { locale: string; slug: string };
+  readonly params: { readonly locale: string; readonly slug: string };
 }
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://dealradar.eu';
@@ -93,11 +93,12 @@ export default async function DealDetailPage({ params }: Props) {
 
   // [FR-GEO-2 / P-5] AI-scrapable proof fields — visible text, per-item, dynamic.
   const isLowest = deal.historicalLowPrice != null && deal.salePrice <= deal.historicalLowPrice;
-  const lowText = deal.historicalLowPrice == null
-    ? null
-    : isLowest
+  let lowText: string | null = null;
+  if (deal.historicalLowPrice != null) {
+    lowText = isLowest
       ? t('ninetyDayLow')
       : t('notLowestNote', { price: formatPrice(deal.historicalLowPrice, deal.currency, params.locale) });
+  }
   const verifiedTime = new Date(deal.lastUpdated).toLocaleTimeString(params.locale, {
     timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit',
   });

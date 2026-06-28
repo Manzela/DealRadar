@@ -5,7 +5,7 @@ export async function generateMetadata({ params: { locale } }: { params: { local
   return { title: `${t('title')} · DealRadar` };
 }
 
-export default async function PrivacyPage({ params: { locale } }: { params: { locale: string } }) {
+export default async function PrivacyPage({ params: { locale } }: Readonly<{ params: { locale: string } }>) {
   setRequestLocale(locale);
   const t = await getTranslations({ locale, namespace: 'privacy' });
   const sections = ['s1', 's2', 's3', 's4', 's5', 's6'] as const;

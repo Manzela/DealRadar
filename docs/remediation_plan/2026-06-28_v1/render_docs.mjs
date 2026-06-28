@@ -64,7 +64,7 @@ for (const b of baseline) {
 writeFileSync(join(here, 'requirements.md'), R);
 
 // ---------- tasks.md ----------
-const phases = [...new Set(tasks.map((t) => t.phase))].sort();
+const phases = [...new Set(tasks.map((t) => t.phase))].sort((a, b) => a - b);
 const PHASE_NAME = { 0: 'SPINE — minimal end-to-end core loop', 1: 'Compliance & i18n core', 2: 'SEO / AEO', 3: 'Security hardening', 4: 'Ingestion depth & data integrity', 5: 'Ops, testing, a11y, regression' };
 let T = `# DealRadar Remediation — Tasks (phased, dependency-ordered)
 > Generated from \`plan.json\`. ${counts.task} tasks across ${phases.length} phases. Each task → requirement(s) → named verification.

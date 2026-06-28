@@ -31,7 +31,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const routes: MetadataRoute.Sitemap = [];
 
   // Home + legal + category routes (one entry each, hreflang across all locales).
-  routes.push(entry('', { changeFrequency: 'hourly', priority: 1.0 }));
+  routes.push(entry('', { changeFrequency: 'hourly', priority: 1 }));
   for (const page of ['imprint', 'privacy', 'terms']) {
     routes.push(entry(`/${page}`, { changeFrequency: 'monthly', priority: 0.3 }));
   }

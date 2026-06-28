@@ -108,14 +108,13 @@ export function dedupeDeals(rawDeals: NormalizedDeal[], limit: number): Normaliz
       : `name:${slugify(deal.productName)}_${slugify(deal.shopName)}`;
 
     const existing = deduppedMap.get(key);
-    if (!existing) {
-      deduppedMap.set(key, deal);
-    } else if (deal.salePrice < existing.salePrice) {
-      deduppedMap.set(key, deal);
-    } else if (deal.salePrice === existing.salePrice && priorityOf(deal.source) < priorityOf(existing.source)) {
-      // Equal price → keep the higher-priority (lower number) provider deterministically.
-      deduppedMap.set(key, deal);
-    }
+    // Keep the cheaper deal; on an exact price tie, keep the higher-priority
+    // (lower number) provider deterministically.
+    const replace =
+      !existing ||
+      deal.salePrice < existing.salePrice ||
+      (deal.salePrice === existing.salePrice && priorityOf(deal.source) < priorityOf(existing.source));
+    if (replace) deduppedMap.set(key, deal);
   }
 
   const merged = Array.from(deduppedMap.values());

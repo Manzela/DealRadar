@@ -19,6 +19,18 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
+// Resolve psql from a fixed allow-list of absolute, system-owned locations
+// instead of via $PATH — $PATH can be attacker-influenced, and spawning a bare
+// command name resolves through it (CWE-426 / Sonar S4036). Covers CI (apt),
+// Homebrew (Apple-silicon + Intel), and Linux/Postgres.app installs.
+const PSQL_CANDIDATES = [
+  '/usr/bin/psql',
+  '/usr/local/bin/psql',
+  '/opt/homebrew/bin/psql',
+  '/Library/PostgreSQL/16/bin/psql',
+  '/Applications/Postgres.app/Contents/Versions/latest/bin/psql',
+];
+
 const url = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL;
 if (!url) {
   console.error('[db:migrate] SUPABASE_DB_URL (or DATABASE_URL) is required.');
@@ -33,17 +45,22 @@ if (!existsSync(schemaPath)) {
   process.exit(1);
 }
 
-console.log(`[db:migrate] applying ${path.relative(root, schemaPath)} …`);
-const res = spawnSync('psql', [url, '-v', 'ON_ERROR_STOP=1', '-f', schemaPath], {
+const psqlBin = PSQL_CANDIDATES.find((p) => existsSync(p));
+if (!psqlBin) {
+  console.error('[db:migrate] `psql` not found in any known location:');
+  for (const p of PSQL_CANDIDATES) console.error(`  - ${p}`);
+  console.error('  Install the PostgreSQL client (e.g. `apt-get install postgresql-client`).');
+  process.exit(1);
+}
+
+console.log(`[db:migrate] applying ${path.relative(root, schemaPath)} via ${psqlBin} …`);
+const res = spawnSync(psqlBin, [url, '-v', 'ON_ERROR_STOP=1', '-f', schemaPath], {
   stdio: 'inherit',
+  shell: false,
 });
 
 if (res.error) {
-  if (res.error.code === 'ENOENT') {
-    console.error('[db:migrate] `psql` not found. Install the PostgreSQL client (e.g. `apt-get install postgresql-client`).');
-  } else {
-    console.error('[db:migrate] failed to launch psql:', res.error.message);
-  }
+  console.error('[db:migrate] failed to launch psql:', res.error.message);
   process.exit(1);
 }
 if (res.status !== 0) {

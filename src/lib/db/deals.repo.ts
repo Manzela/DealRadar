@@ -46,7 +46,7 @@ function fromRow(r: Record<string, unknown>): NormalizedDeal {
     source: r.source as string, lastUpdated: r.last_updated as string,
     slug, eanCode: (r.ean_code as string) ?? null, upcCode: (r.upc_code as string) ?? null,
     mpn: (r.mpn as string) ?? null, modelNumber: (r.model_number as string) ?? null,
-    historicalLowPrice: r.historical_low_price != null ? Number(r.historical_low_price) : null,
+    historicalLowPrice: r.historical_low_price == null ? null : Number(r.historical_low_price),
     merchantId: (r.merchant_id as string) ?? null, affiliateSubid: (r.affiliate_subid as string) ?? null,
   };
 }

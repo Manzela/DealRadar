@@ -32,8 +32,8 @@ export class StrackrProvider implements PriceProvider {
   readonly supportedCountries: CountryCode[] = ['DE','AT','FR','ES','IT','PL','NL','PT','SE','RO','GB','BE','DK','FI','NO','CH'];
   readonly priority = 25; // between AWIN (20) and Tradedoubler (30)
 
-  private apiId = process.env.STRACKR_API_ID ?? '';
-  private apiKey = process.env.STRACKR_API_KEY ?? '';
+  private readonly apiId = process.env.STRACKR_API_ID ?? '';
+  private readonly apiKey = process.env.STRACKR_API_KEY ?? '';
   private mock = false;
 
   async init(): Promise<ProviderHealth> {
@@ -106,7 +106,7 @@ export class StrackrProvider implements PriceProvider {
       lastUpdated: new Date().toISOString(),
       eanCode: p.ean ?? p.gtin ?? null,
       mpn: p.mpn ?? null,
-      merchantId: p.advertiser?.id != null ? String(p.advertiser.id) : null,
+      merchantId: p.advertiser?.id == null ? null : String(p.advertiser.id),
     };
   }
 }

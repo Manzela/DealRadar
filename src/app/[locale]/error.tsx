@@ -8,7 +8,10 @@ import { useTranslations } from 'next-intl';
  * unavailable) and offers a retry instead of a blank screen. Must be a Client
  * Component per the App Router contract.
  */
-export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+export default function RouteError({
+  error,
+  reset,
+}: Readonly<{ error: Error & { digest?: string }; reset: () => void }>) {
   const t = useTranslations('error');
 
   useEffect(() => {
