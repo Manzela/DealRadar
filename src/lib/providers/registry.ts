@@ -14,8 +14,10 @@
 import { DummyJsonProvider } from './dummyjson';
 import { KelkooProvider } from './kelkoo';
 import { AwinProvider } from './awin';
+import { StrackrProvider } from './strackr';
 import { TradedoublerProvider } from './tradedoubler';
 import { IdealoMockProvider } from './idealo.mock';
+import { slugify } from '../utils/slug';
 import {
   ProviderError,
   type DealQuery, type NormalizedDeal, type PriceProvider, type ProviderHealth,
@@ -25,9 +27,14 @@ const ALL_PROVIDERS: PriceProvider[] = [
   new DummyJsonProvider(), // priority 1 — free live "real API" test feed (no key/commission)
   new KelkooProvider(),
   new AwinProvider(),
+  new StrackrProvider(),
   new TradedoublerProvider(),
   new IdealoMockProvider(),
 ];
+
+/** source id → priority, for deterministic equal-price tie-breaking in dedup. */
+const PROVIDER_PRIORITY: Map<string, number> = new Map(ALL_PROVIDERS.map((p) => [p.id, p.priority]));
+const priorityOf = (source: string): number => PROVIDER_PRIORITY.get(source) ?? Number.MAX_SAFE_INTEGER;
 
 // `dummyjson` is a local TEST feed: it's OPT-IN ONLY and never runs in
 // production. Set DEALRADAR_ONLY_PROVIDER=dummyjson (e.g. in .env.local) to pin
@@ -63,27 +70,19 @@ export function providersFor(country: DealQuery['country']): PriceProvider[] {
 }
 
 /**
- * Fetch deals across providers for one query.
- * Strategy: take the highest-priority healthy provider's results; top up with
- * lower-priority providers only while below `limit`, deduping by productId.
+ * Fetch deals across providers for one query using hybrid deduplication.
+ * Strategy: Group deals by EAN (if present) or slugified name+merchant. Keep lowest sale price.
  */
 export async function fetchDealsAcrossProviders(query: DealQuery): Promise<NormalizedDeal[]> {
   const health = await initProviders();
   const limit = query.limit ?? 50;
-  const seen = new Set<string>();
-  const merged: NormalizedDeal[] = [];
+  const rawDeals: NormalizedDeal[] = [];
 
   for (const provider of providersFor(query.country)) {
     if (!health.get(provider.id)?.ok) continue;
-    if (merged.length >= limit) break;
     try {
-      const deals = await provider.fetchDeals({ ...query, limit: limit - merged.length });
-      for (const d of deals) {
-        if (!seen.has(d.productId)) {
-          seen.add(d.productId);
-          merged.push(d);
-        }
-      }
+      const deals = await provider.fetchDeals({ ...query, limit: limit * 2 });
+      rawDeals.push(...deals);
     } catch (e) {
       if (e instanceof ProviderError) {
         console.error(`[registry] ${provider.id} failed (retryable=${e.retryable}): ${e.message} — falling through`);
@@ -92,5 +91,32 @@ export async function fetchDealsAcrossProviders(query: DealQuery): Promise<Norma
       throw e;
     }
   }
+
+  return dedupeDeals(rawDeals, limit);
+}
+
+/**
+ * Hybrid deduplication (pure, unit-tested): group by EAN when present, else by
+ * slugified name+shop. Keep the lowest sale price; on an exact tie, keep the
+ * higher-priority (lower number) provider. Sort by discount %, cap at `limit`.
+ */
+export function dedupeDeals(rawDeals: NormalizedDeal[], limit: number): NormalizedDeal[] {
+  const deduppedMap = new Map<string, NormalizedDeal>();
+  for (const deal of rawDeals) {
+    const key = deal.eanCode
+      ? `ean:${deal.eanCode}`
+      : `name:${slugify(deal.productName)}_${slugify(deal.shopName)}`;
+
+    const existing = deduppedMap.get(key);
+    // Keep the cheaper deal; on an exact price tie, keep the higher-priority
+    // (lower number) provider deterministically.
+    const replace =
+      !existing ||
+      deal.salePrice < existing.salePrice ||
+      (deal.salePrice === existing.salePrice && priorityOf(deal.source) < priorityOf(existing.source));
+    if (replace) deduppedMap.set(key, deal);
+  }
+
+  const merged = Array.from(deduppedMap.values());
   return merged.sort((a, b) => b.discountPercent - a.discountPercent).slice(0, limit);
 }

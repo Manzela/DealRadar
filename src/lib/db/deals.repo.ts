@@ -9,24 +9,33 @@ import 'server-only';
 import { supabase, supabaseConfigured } from './supabase';
 import { fetchDealsAcrossProviders } from '../providers/registry';
 import { queryTokens } from '../utils/search-tokens';
+import { slugify } from '../utils/slug';
 import type { CategorySlug, CountryCode, DealQuery, NormalizedDeal } from '../providers/types';
 
 const TABLE = 'deals';
 
 /** Camel ⇄ snake mapping for the deals table. */
 function toRow(d: NormalizedDeal) {
+  const generatedSlug = d.slug || `${slugify(d.productName)}-${d.productId.replace(/[^a-z0-9]/gi, '-')}`;
   return {
     product_id: d.productId, product_name: d.productName, shop_name: d.shopName,
     shop_url: d.shopUrl, shop_logo_url: d.shopLogoUrl, original_price: d.originalPrice,
     sale_price: d.salePrice, discount_percent: d.discountPercent, currency: d.currency,
     category: d.category, brand: d.brand, image_url: d.imageUrl, country: d.country,
     city: d.city, is_sponsored: d.isSponsored, source: d.source, last_updated: d.lastUpdated,
+    slug: generatedSlug, ean_code: d.eanCode ?? null, upc_code: d.upcCode ?? null,
+    mpn: d.mpn ?? null, model_number: d.modelNumber ?? null,
+    historical_low_price: d.historicalLowPrice ?? null,
+    merchant_id: d.merchantId ?? null, affiliate_subid: d.affiliateSubid ?? null,
   };
 }
 
 function fromRow(r: Record<string, unknown>): NormalizedDeal {
+  const productId = r.product_id as string;
+  const productName = r.product_name as string;
+  const slug = (r.slug as string) || `${slugify(productName)}-${productId.replace(/[^a-z0-9]/gi, '-')}`;
   return {
-    productId: r.product_id as string, productName: r.product_name as string,
+    productId, productName,
     shopName: r.shop_name as string, shopUrl: r.shop_url as string,
     shopLogoUrl: (r.shop_logo_url as string) ?? null,
     originalPrice: Number(r.original_price), salePrice: Number(r.sale_price),
@@ -35,6 +44,10 @@ function fromRow(r: Record<string, unknown>): NormalizedDeal {
     imageUrl: (r.image_url as string) ?? null, country: r.country as CountryCode,
     city: (r.city as string) ?? null, isSponsored: Boolean(r.is_sponsored),
     source: r.source as string, lastUpdated: r.last_updated as string,
+    slug, eanCode: (r.ean_code as string) ?? null, upcCode: (r.upc_code as string) ?? null,
+    mpn: (r.mpn as string) ?? null, modelNumber: (r.model_number as string) ?? null,
+    historicalLowPrice: r.historical_low_price == null ? null : Number(r.historical_low_price),
+    merchantId: (r.merchant_id as string) ?? null, affiliateSubid: (r.affiliate_subid as string) ?? null,
   };
 }
 
@@ -68,7 +81,12 @@ export async function queryDeals(filters: DealFilters): Promise<NormalizedDeal[]
 
   let q = supabase().from(TABLE).select('*').eq('country', filters.country);
   // City scoping: prefer city matches but never exclude country-wide deals (city IS NULL).
-  if (filters.city) q = q.or(`city.eq.${filters.city},city.is.null`);
+  // Strip PostgREST or()-grammar metacharacters ( , ( ) " ) to prevent filter
+  // injection from the user-supplied city param while keeping real names intact.
+  if (filters.city) {
+    const city = filters.city.replace(/[(),"]/g, '').trim().slice(0, 100);
+    if (city) q = q.or(`city.eq.${city},city.is.null`);
+  }
   if (filters.category) q = q.eq('category', filters.category);
   if (filters.brand) q = q.eq('brand', filters.brand);
   // Token-AND match: each term must appear in the product name or brand, so
@@ -117,3 +135,72 @@ function sortDeals(deals: NormalizedDeal[], sort?: DealFilters['sort']): Normali
     default: return copy.sort((a, b) => b.discountPercent - a.discountPercent);
   }
 }
+
+export async function getDealBySlug(slug: string, country?: CountryCode): Promise<NormalizedDeal | null> {
+  if (!slug) return null;
+  if (!supabaseConfigured()) {
+    const deals = await fetchDealsAcrossProviders({ country: country || 'DE', limit: 500 });
+    return deals.find((d) => d.slug === slug || slugify(d.productName) === slug) || null;
+  }
+  let q = supabase().from(TABLE).select('*').eq('slug', slug);
+  if (country) q = q.eq('country', country);
+  const { data, error } = await q.maybeSingle();
+  if (error) {
+    console.error(`[deals.repo] getDealBySlug failed for ${slug}:`, error.message);
+    return null;
+  }
+  return data ? fromRow(data) : null;
+}
+
+/**
+ * Deals whose row was written/updated since `sinceIso`. Used by the
+ * /api/refresh-alerts pass so feed-ingested (AWIN) deals — which never flow
+ * through the per-query refresh path — still trigger price-drop alerts.
+ */
+export async function getRecentlyUpdatedDeals(sinceIso: string): Promise<NormalizedDeal[]> {
+  if (!supabaseConfigured()) return [];
+  const { data, error } = await supabase()
+    .from(TABLE)
+    .select('*')
+    .gte('last_updated', sinceIso)
+    .order('last_updated', { ascending: false })
+    .limit(5000);
+  if (error) {
+    console.error('[deals.repo] getRecentlyUpdatedDeals failed:', error.message);
+    return [];
+  }
+  return (data ?? []).map(fromRow);
+}
+
+/**
+ * All persisted deal slugs (every partner/country) for the sitemap. Slugs are
+ * globally unique, so one query covers Awin/Kelkoo/Tradedoubler/Strackr alike.
+ * Dev/mock fallback samples the registry so the sitemap is non-empty locally.
+ */
+export async function getAllDealSlugs(limit = 5000): Promise<{ slug: string; lastUpdated: string }[]> {
+  if (!supabaseConfigured()) {
+    const deals = await fetchDealsAcrossProviders({ country: 'DE', limit: 200 });
+    return deals.map((d) => ({ slug: d.slug || slugify(d.productName), lastUpdated: d.lastUpdated }));
+  }
+  const { data, error } = await supabase()
+    .from(TABLE)
+    .select('slug,last_updated')
+    .not('slug', 'is', null)
+    .limit(limit);
+  if (error) {
+    console.error('[deals.repo] getAllDealSlugs failed:', error.message);
+    return [];
+  }
+  return (data ?? []).map((r) => ({ slug: r.slug as string, lastUpdated: r.last_updated as string }));
+}
+
+export async function updateHistoricalLows(): Promise<void> {
+  if (!supabaseConfigured()) return;
+  try {
+    const { error } = await supabase().rpc('update_historical_lows_batch');
+    if (error) console.error('[deals.repo] updateHistoricalLows error:', error.message);
+  } catch (e) {
+    console.error('[deals.repo] updateHistoricalLows exception:', e);
+  }
+}
+
