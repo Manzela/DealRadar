@@ -39,6 +39,8 @@ export interface NormalizedDeal {
   gallery?: string[] | null;
   /** Real product description for the detail modal (provider feed). Optional. */
   description?: string | null;
+  /** Direct merchant product URL (not the affiliate link) — for live price/stock verification. */
+  merchantUrl?: string | null;
   country: CountryCode;
   city: string | null;
   /** True for every affiliate-derived deal — drives the "sponsored" badge. */

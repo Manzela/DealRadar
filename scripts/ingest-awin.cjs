@@ -136,6 +136,7 @@ function normalizeRow(g) {
     image_url: g('aw_image_url').trim() || g('merchant_image_url').trim() || null, // productserve proxy first
     gallery: gallery.length ? gallery : null,
     description,
+    merchant_url: g('merchant_deep_link').trim() || null, // direct shop URL for the live verifier
     country: COUNTRY,
     city: null,
     is_sponsored: true,

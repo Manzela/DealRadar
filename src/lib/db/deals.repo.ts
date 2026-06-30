@@ -20,7 +20,8 @@ function toRow(d: NormalizedDeal) {
     shop_url: d.shopUrl, shop_logo_url: d.shopLogoUrl, original_price: d.originalPrice,
     sale_price: d.salePrice, discount_percent: d.discountPercent, currency: d.currency,
     category: d.category, brand: d.brand, image_url: d.imageUrl,
-    gallery: d.gallery ?? null, description: d.description ?? null, country: d.country,
+    gallery: d.gallery ?? null, description: d.description ?? null,
+    merchant_url: d.merchantUrl ?? null, country: d.country,
     city: d.city, is_sponsored: d.isSponsored, source: d.source, last_updated: d.lastUpdated,
   };
 }
@@ -35,6 +36,7 @@ function fromRow(r: Record<string, unknown>): NormalizedDeal {
     category: r.category as CategorySlug, brand: (r.brand as string) ?? null,
     imageUrl: (r.image_url as string) ?? null,
     gallery: (r.gallery as string[]) ?? null, description: (r.description as string) ?? null,
+    merchantUrl: (r.merchant_url as string) ?? null,
     country: r.country as CountryCode,
     city: (r.city as string) ?? null, isSponsored: Boolean(r.is_sponsored),
     source: r.source as string, lastUpdated: r.last_updated as string,

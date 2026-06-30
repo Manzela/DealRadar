@@ -18,6 +18,7 @@ create table if not exists public.deals (
   image_url         text,
   gallery           text[],                     -- extra real product images (detail modal)
   description       text,                       -- real product description (detail modal)
+  merchant_url      text,                       -- direct shop URL (live price/stock verifier)
   country           char(2)       not null,
   city              text,                       -- nullable: country-wide deals
   is_sponsored      boolean       not null default true,
@@ -26,8 +27,9 @@ create table if not exists public.deals (
 );
 
 -- Migration for existing databases (safe to re-run): add the detail columns.
-alter table public.deals add column if not exists gallery     text[];
-alter table public.deals add column if not exists description  text;
+alter table public.deals add column if not exists gallery       text[];
+alter table public.deals add column if not exists description    text;
+alter table public.deals add column if not exists merchant_url   text;
 
 -- Hot path: country (+ city) scoped, sorted by discount.
 create index if not exists deals_country_discount_idx
