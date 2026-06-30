@@ -43,7 +43,14 @@ const HEADERS = {
 };
 
 loadEnvLocal();
-const BASE = process.env.SUPABASE_URL;
+// Tolerate a SUPABASE_URL secret that's missing the scheme or has a trailing slash.
+function normalizeBaseUrl(u) {
+  u = (u || '').trim();
+  if (!u) return u;
+  if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+  return u.replace(/\/+$/, '');
+}
+const BASE = normalizeBaseUrl(process.env.SUPABASE_URL);
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!BASE || !KEY) { console.error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.'); process.exit(1); }
 const SUPA = { apikey: KEY, Authorization: `Bearer ${KEY}` };
