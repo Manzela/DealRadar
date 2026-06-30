@@ -28,7 +28,8 @@
     "today": "Hoy",
     "close": "Cerrar",
     "sizes": "Tallas",
-    "details": "Detalles del producto"
+    "details": "Detalles del producto",
+    "priceNote": "Price and availability may change — confirm at the store."
   },
   "alert": {
     "button": "Recibir alerta del mejor precio",

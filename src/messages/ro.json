@@ -28,7 +28,8 @@
     "today": "Azi",
     "close": "Închide",
     "sizes": "Mărimi",
-    "details": "Detalii produs"
+    "details": "Detalii produs",
+    "priceNote": "Price and availability may change — confirm at the store."
   },
   "alert": {
     "button": "Primește alertă de preț",

@@ -28,7 +28,8 @@
     "today": "Vandaag",
     "close": "Sluiten",
     "sizes": "Maten",
-    "details": "Productdetails"
+    "details": "Productdetails",
+    "priceNote": "Price and availability may change — confirm at the store."
   },
   "alert": {
     "button": "Ontvang beste-prijsmelding",

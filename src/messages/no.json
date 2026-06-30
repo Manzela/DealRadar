@@ -28,7 +28,8 @@
     "today": "I dag",
     "close": "Lukk",
     "sizes": "Størrelser",
-    "details": "Produktdetaljer"
+    "details": "Produktdetaljer",
+    "priceNote": "Price and availability may change — confirm at the store."
   },
   "alert": {
     "button": "Få varsel om beste pris",

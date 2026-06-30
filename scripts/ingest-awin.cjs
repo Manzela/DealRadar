@@ -113,6 +113,14 @@ function normalizeRow(g) {
   const deepLink = g('aw_deep_link').trim();
   if (!awId || !deepLink) return null;
 
+  // Real gallery: the card image (productserve proxy) + any merchant images the
+  // feed ships. Deduped, http(s) only.
+  const gallery = [...new Set([
+    g('aw_image_url'), g('large_image'), g('alternate_image'),
+    g('alternate_image_two'), g('alternate_image_three'), g('alternate_image_four'),
+  ].map((u) => (u || '').trim()).filter((u) => /^https?:\/\//.test(u)))];
+  const description = g('description').trim().replace(/\s+/g, ' ').slice(0, 1500) || null;
+
   return {
     product_id: `awin:${awId}`,
     product_name: g('product_name').trim(),
@@ -126,6 +134,8 @@ function normalizeRow(g) {
     category: mapCategory(g('category_name').trim(), g('merchant_category').trim()),
     brand: g('brand_name').trim() || null,
     image_url: g('aw_image_url').trim() || g('merchant_image_url').trim() || null, // productserve proxy first
+    gallery: gallery.length ? gallery : null,
+    description,
     country: COUNTRY,
     city: null,
     is_sponsored: true,

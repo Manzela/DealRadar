@@ -28,7 +28,8 @@
     "today": "Today",
     "close": "Close",
     "sizes": "Sizes",
-    "details": "Product details"
+    "details": "Product details",
+    "priceNote": "Price and availability may change — confirm at the store."
   },
   "alert": {
     "button": "Receive best price alert",

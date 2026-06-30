@@ -16,12 +16,18 @@ create table if not exists public.deals (
   category          text          not null,
   brand             text,
   image_url         text,
+  gallery           text[],                     -- extra real product images (detail modal)
+  description       text,                       -- real product description (detail modal)
   country           char(2)       not null,
   city              text,                       -- nullable: country-wide deals
   is_sponsored      boolean       not null default true,
   source            text          not null,     -- provider id
   last_updated      timestamptz   not null default now()
 );
+
+-- Migration for existing databases (safe to re-run): add the detail columns.
+alter table public.deals add column if not exists gallery     text[];
+alter table public.deals add column if not exists description  text;
 
 -- Hot path: country (+ city) scoped, sorted by discount.
 create index if not exists deals_country_discount_idx

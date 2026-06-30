@@ -28,7 +28,8 @@
     "today": "Tänään",
     "close": "Sulje",
     "sizes": "Koot",
-    "details": "Tuotetiedot"
+    "details": "Tuotetiedot",
+    "priceNote": "Price and availability may change — confirm at the store."
   },
   "alert": {
     "button": "Saa ilmoitus parhaasta hinnasta",

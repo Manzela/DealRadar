@@ -28,7 +28,8 @@
     "today": "Idag",
     "close": "Stäng",
     "sizes": "Storlekar",
-    "details": "Produktdetaljer"
+    "details": "Produktdetaljer",
+    "priceNote": "Price and availability may change — confirm at the store."
   },
   "alert": {
     "button": "Få prisbevakning",
