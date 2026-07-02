@@ -3,9 +3,9 @@
  *
  * Real data — gallery images and the description — comes from the provider feed
  * and is carried on the deal (`gallery`, `description`). We no longer fabricate a
- * spec table or fake "also available at" offers: a single feed has one price per
- * product and no structured specs, so inventing them would mislead. The model
- * code is still derived from productId (feeds rarely ship a stable model number).
+ * spec table, fake "also available at" offers, or a synthetic model code: a
+ * single feed has one price per product and no structured specs, so inventing
+ * them would mislead.
  */
 import type { NormalizedDeal } from '../providers/types';
 
@@ -26,13 +26,6 @@ function seeded(seed: string): () => number {
 export function productGallery(deal: NormalizedDeal): string[] {
   if (deal.gallery && deal.gallery.length) return deal.gallery;
   return deal.imageUrl ? [deal.imageUrl] : [];
-}
-
-/** Stable synthetic model code — feeds rarely ship a usable model number. */
-export function productModel(deal: NormalizedDeal): string {
-  const r = seeded(`${deal.productId}:model`);
-  const prefix = (deal.brand ?? '').replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || 'DR';
-  return `${prefix}-${Math.floor(r() * 9000) + 1000}`;
 }
 
 export interface SizeOption {

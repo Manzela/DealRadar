@@ -10,7 +10,6 @@ import { PriceAlertButton } from './PriceAlertButton';
 import { DealDetailModal } from './DealDetailModal';
 import { formatPrice, formatDiscount } from '@/lib/utils/format';
 import { priceWindow } from '@/lib/utils/price-history';
-import { productModel } from '@/lib/utils/product-details';
 import { decorateAffiliateUrl } from '@/lib/utils/affiliate';
 import { displayShopName } from '@/lib/utils/shop';
 import type { NormalizedDeal } from '@/lib/providers/types';
@@ -64,8 +63,6 @@ export function DealCard({ deal, priority = false }: { deal: NormalizedDeal; pri
             <img src={deal.shopLogoUrl} alt="" className="h-4 w-4 rounded-sm object-contain" />
           )}
           <span>{displayShopName(deal.shopName)}</span>
-          <span aria-hidden>·</span>
-          <span className="text-zinc-400">{productModel(deal)}</span>
         </div>
 
         <div className="mt-auto flex items-baseline gap-2 pt-2">

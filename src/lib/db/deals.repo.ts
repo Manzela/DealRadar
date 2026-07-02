@@ -77,13 +77,18 @@ export async function queryDeals(filters: DealFilters): Promise<NormalizedDeal[]
 
   let q = supabase().from(TABLE).select('*').eq('country', filters.country).eq('hidden', false);
   if (filters.excludeHomepageHidden) q = q.eq('homepage_hidden', false);
-  // City scoping: prefer city matches but never exclude country-wide deals (city IS NULL).
-  if (filters.city) q = q.or(`city.eq.${filters.city},city.is.null`);
+  // City scoping: prefer city matches but never exclude country-wide deals
+  // (city IS NULL). The value comes from a user-controlled cookie / query param
+  // and is interpolated into a PostgREST or= filter, so it MUST be sanitized —
+  // unquoted specials (, . ( ) ") would alter the filter or 400 the whole query.
+  const city = sanitizeCity(filters.city);
+  if (city) q = q.or(`city.eq."${city}",city.is.null`);
   if (filters.category) q = q.eq('category', filters.category);
   if (filters.brand) q = q.eq('brand', filters.brand);
   // Token-AND match: each term must appear in the product name or brand, so
   // menu terms like "OLED TVs" match "LG 4K OLED TV 55\"". Tokens are stripped
-  // to [a-z0-9] by queryTokens, so they're safe to interpolate into ilike.
+  // to letters/digits only by queryTokens (no PostgREST specials, no LIKE
+  // wildcards), so they're safe to interpolate into ilike.
   for (const tok of filters.q ? queryTokens(filters.q) : []) {
     q = q.or(`product_name.ilike.%${tok}%,brand.ilike.%${tok}%`);
   }
@@ -104,6 +109,26 @@ export async function queryDeals(filters: DealFilters): Promise<NormalizedDeal[]
   return (data ?? []).map(fromRow);
 }
 
+/**
+ * Fetch specific deals by product id — used by the alert-notification pass to
+ * compare current prices against subscribers' targets. Hidden (sold-out/gone)
+ * deals are excluded: we never email about a deal we wouldn't show.
+ */
+export async function dealsByIds(productIds: string[]): Promise<NormalizedDeal[]> {
+  if (!supabaseConfigured() || productIds.length === 0) return [];
+  const out: NormalizedDeal[] = [];
+  for (let i = 0; i < productIds.length; i += 100) {
+    const { data, error } = await supabase()
+      .from(TABLE)
+      .select('*')
+      .in('product_id', productIds.slice(i, i + 100))
+      .eq('hidden', false);
+    if (error) throw new Error(`[deals.repo] dealsByIds failed: ${error.message}`);
+    out.push(...(data ?? []).map(fromRow));
+  }
+  return out;
+}
+
 export async function distinctBrands(country: CountryCode, category?: CategorySlug): Promise<string[]> {
   if (!supabaseConfigured()) {
     const deals = await fetchDealsAcrossProviders({ country, category, limit: 500 });
@@ -116,6 +141,18 @@ export async function distinctBrands(country: CountryCode, category?: CategorySl
   });
   if (error) throw new Error(`[deals.repo] distinct_brands failed: ${error.message}`);
   return ((data ?? []) as { brand: string }[]).map((r) => r.brand);
+}
+
+/**
+ * City names for the PostgREST filter: keep letters/digits/space/.-' (covers
+ * "St. Gallen", "Frankfurt am Main", "Villingen-Schwenningen"), drop everything
+ * else — including the PostgREST-reserved " , ( ) — and cap the length. The
+ * kept charset contains nothing that can escape the double-quoted literal.
+ */
+function sanitizeCity(city: string | undefined): string | undefined {
+  if (!city) return undefined;
+  const clean = city.replace(/[^\p{L}\p{N} .'-]/gu, '').trim().slice(0, 80);
+  return clean || undefined;
 }
 
 function sortDeals(deals: NormalizedDeal[], sort?: DealFilters['sort']): NormalizedDeal[] {
