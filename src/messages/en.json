@@ -47,7 +47,9 @@
     "seeAll": "See all results",
     "resultsFor": "Results for “{q}”",
     "allResults": "All deals",
-    "noResults": "No deals match your filters. Try widening the price range or lowering the minimum discount."
+    "noResults": "No deals match your filters. Try widening the price range or lowering the minimum discount.",
+    "prevPage": "Previous page",
+    "nextPage": "Next page"
   },
   "filters": {
     "heading": "Filters",

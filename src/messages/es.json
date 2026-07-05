@@ -47,7 +47,9 @@
     "seeAll": "Ver todos los resultados",
     "resultsFor": "Resultados para «{q}»",
     "allResults": "Todas las ofertas",
-    "noResults": "Ninguna oferta coincide con tus filtros. Prueba a ampliar el rango de precios o a bajar el descuento mínimo."
+    "noResults": "Ninguna oferta coincide con tus filtros. Prueba a ampliar el rango de precios o a bajar el descuento mínimo.",
+    "prevPage": "Página anterior",
+    "nextPage": "Página siguiente"
   },
   "filters": {
     "heading": "Filtros",

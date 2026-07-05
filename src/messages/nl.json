@@ -47,7 +47,9 @@
     "seeAll": "Alle resultaten bekijken",
     "resultsFor": "Resultaten voor ‘{q}’",
     "allResults": "Alle deals",
-    "noResults": "Geen deals voldoen aan je filters. Verruim het prijsbereik of verlaag de minimale korting."
+    "noResults": "Geen deals voldoen aan je filters. Verruim het prijsbereik of verlaag de minimale korting.",
+    "prevPage": "Vorige pagina",
+    "nextPage": "Volgende pagina"
   },
   "filters": {
     "heading": "Filters",

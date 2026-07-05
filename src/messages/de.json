@@ -47,7 +47,9 @@
     "seeAll": "Alle Ergebnisse anzeigen",
     "resultsFor": "Ergebnisse für „{q}“",
     "allResults": "Alle Angebote",
-    "noResults": "Keine Angebote entsprechen deinen Filtern. Erweitere die Preisspanne oder senke den Mindestrabatt."
+    "noResults": "Keine Angebote entsprechen deinen Filtern. Erweitere die Preisspanne oder senke den Mindestrabatt.",
+    "prevPage": "Vorherige Seite",
+    "nextPage": "Nächste Seite"
   },
   "filters": {
     "heading": "Filter",

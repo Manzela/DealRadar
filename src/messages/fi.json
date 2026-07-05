@@ -47,7 +47,9 @@
     "seeAll": "Näytä kaikki tulokset",
     "resultsFor": "Tulokset haulle ”{q}”",
     "allResults": "Kaikki tarjoukset",
-    "noResults": "Mikään tarjous ei vastaa suodattimiasi. Kokeile laajentaa hintaväliä tai laskea vähimmäisalennusta."
+    "noResults": "Mikään tarjous ei vastaa suodattimiasi. Kokeile laajentaa hintaväliä tai laskea vähimmäisalennusta.",
+    "prevPage": "Edellinen sivu",
+    "nextPage": "Seuraava sivu"
   },
   "filters": {
     "heading": "Suodattimet",

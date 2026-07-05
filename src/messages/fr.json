@@ -47,7 +47,9 @@
     "seeAll": "Voir tous les résultats",
     "resultsFor": "Résultats pour « {q} »",
     "allResults": "Toutes les offres",
-    "noResults": "Aucune offre ne correspond à vos filtres. Essayez d'élargir la fourchette de prix ou de réduire la remise minimale."
+    "noResults": "Aucune offre ne correspond à vos filtres. Essayez d'élargir la fourchette de prix ou de réduire la remise minimale.",
+    "prevPage": "Page précédente",
+    "nextPage": "Page suivante"
   },
   "filters": {
     "heading": "Filtres",

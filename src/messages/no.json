@@ -47,7 +47,9 @@
     "seeAll": "Se alle resultater",
     "resultsFor": "Resultater for «{q}»",
     "allResults": "Alle tilbud",
-    "noResults": "Ingen tilbud samsvarer med filtrene dine. Prøv å utvide prisintervallet eller senke minimumsrabatten."
+    "noResults": "Ingen tilbud samsvarer med filtrene dine. Prøv å utvide prisintervallet eller senke minimumsrabatten.",
+    "prevPage": "Forrige side",
+    "nextPage": "Neste side"
   },
   "filters": {
     "heading": "Filtre",

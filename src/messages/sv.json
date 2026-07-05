@@ -47,7 +47,9 @@
     "seeAll": "Visa alla resultat",
     "resultsFor": "Resultat för ”{q}”",
     "allResults": "Alla erbjudanden",
-    "noResults": "Inga erbjudanden matchar dina filter. Försök bredda prisintervallet eller sänka minsta rabatt."
+    "noResults": "Inga erbjudanden matchar dina filter. Försök bredda prisintervallet eller sänka minsta rabatt.",
+    "prevPage": "Föregående sida",
+    "nextPage": "Nästa sida"
   },
   "filters": {
     "heading": "Filter",

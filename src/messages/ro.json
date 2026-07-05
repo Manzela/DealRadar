@@ -47,7 +47,9 @@
     "seeAll": "Vezi toate rezultatele",
     "resultsFor": "Rezultate pentru „{q}”",
     "allResults": "Toate ofertele",
-    "noResults": "Nicio ofertă nu corespunde filtrelor tale. Încearcă să lărgești intervalul de preț sau să reduci reducerea minimă."
+    "noResults": "Nicio ofertă nu corespunde filtrelor tale. Încearcă să lărgești intervalul de preț sau să reduci reducerea minimă.",
+    "prevPage": "Pagina anterioară",
+    "nextPage": "Pagina următoare"
   },
   "filters": {
     "heading": "Filtre",

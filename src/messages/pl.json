@@ -47,7 +47,9 @@
     "seeAll": "Zobacz wszystkie wyniki",
     "resultsFor": "Wyniki dla „{q}”",
     "allResults": "Wszystkie okazje",
-    "noResults": "Żadna okazja nie pasuje do filtrów. Spróbuj poszerzyć zakres cen lub obniżyć minimalny rabat."
+    "noResults": "Żadna okazja nie pasuje do filtrów. Spróbuj poszerzyć zakres cen lub obniżyć minimalny rabat.",
+    "prevPage": "Poprzednia strona",
+    "nextPage": "Następna strona"
   },
   "filters": {
     "heading": "Filtry",

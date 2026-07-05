@@ -65,17 +65,29 @@ export interface DealFilters extends DealQuery {
   excludeHomepageHidden?: boolean;
 }
 
-export async function queryDeals(filters: DealFilters): Promise<NormalizedDeal[]> {
-  if (!supabaseConfigured()) {
-    // Mock-data dev path: country-scoped, filtered in memory.
-    let deals = await fetchDealsAcrossProviders({ ...filters, limit: 500 });
-    if (filters.brand) deals = deals.filter((d) => d.brand === filters.brand);
-    if (filters.minPrice !== undefined) deals = deals.filter((d) => d.salePrice >= filters.minPrice!);
-    if (filters.maxPrice !== undefined) deals = deals.filter((d) => d.salePrice <= filters.maxPrice!);
-    return sortDeals(deals, filters.sort).slice(filters.offset ?? 0, (filters.offset ?? 0) + (filters.limit ?? 24));
-  }
+export interface PagedDeals {
+  deals: NormalizedDeal[];
+  /** Rows matching the filters, ignoring limit/offset (-1 when not counted). */
+  total: number;
+}
 
-  let q = supabase().from(TABLE).select('*').eq('country', filters.country).eq('hidden', false);
+export async function queryDeals(filters: DealFilters): Promise<NormalizedDeal[]> {
+  return (await runQuery(filters, false)).deals;
+}
+
+/**
+ * Like queryDeals, but also returns the total match count and clamps the offset
+ * onto the last page (?page=999 shows the final page instead of a PostgREST
+ * out-of-range error). The browse pages use this for numbered pagination.
+ */
+export async function queryDealsPaged(filters: DealFilters): Promise<PagedDeals> {
+  return runQuery(filters, true);
+}
+
+// Builder deliberately untyped: supabase-js generics add noise without safety here.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyDealFilters(q: any, filters: DealFilters): any {
+  q = q.eq('country', filters.country).eq('hidden', false);
   if (filters.excludeHomepageHidden) q = q.eq('homepage_hidden', false);
   // City scoping: prefer city matches but never exclude country-wide deals
   // (city IS NULL). The value comes from a user-controlled cookie / query param
@@ -95,18 +107,55 @@ export async function queryDeals(filters: DealFilters): Promise<NormalizedDeal[]
   if (filters.minDiscountPercent) q = q.gte('discount_percent', filters.minDiscountPercent);
   if (filters.minPrice !== undefined) q = q.gte('sale_price', filters.minPrice);
   if (filters.maxPrice !== undefined) q = q.lte('sale_price', filters.maxPrice);
+  return q;
+}
 
+async function runQuery(filters: DealFilters, withTotal: boolean): Promise<PagedDeals> {
+  const limit = filters.limit ?? 24;
+
+  if (!supabaseConfigured()) {
+    // Mock-data dev path: country-scoped, filtered in memory.
+    let deals = await fetchDealsAcrossProviders({ ...filters, limit: 500 });
+    if (filters.brand) deals = deals.filter((d) => d.brand === filters.brand);
+    if (filters.minPrice !== undefined) deals = deals.filter((d) => d.salePrice >= filters.minPrice!);
+    if (filters.maxPrice !== undefined) deals = deals.filter((d) => d.salePrice <= filters.maxPrice!);
+    const sorted = sortDeals(deals, filters.sort);
+    const offset = clampOffset(filters.offset ?? 0, sorted.length, limit, withTotal);
+    return { deals: sorted.slice(offset, offset + limit), total: withTotal ? sorted.length : -1 };
+  }
+
+  let total = -1;
+  let offset = filters.offset ?? 0;
+  if (withTotal) {
+    const { count, error } = await applyDealFilters(
+      supabase().from(TABLE).select('product_id', { count: 'exact', head: true }),
+      filters,
+    );
+    if (error) throw new Error(`[deals.repo] count failed: ${error.message}`);
+    total = count ?? 0;
+    offset = clampOffset(offset, total, limit, true);
+  }
+
+  let q = applyDealFilters(supabase().from(TABLE).select('*'), filters);
   switch (filters.sort) {
     case 'price-asc': q = q.order('sale_price', { ascending: true }); break;
     case 'price-desc': q = q.order('sale_price', { ascending: false }); break;
     case 'newest': q = q.order('last_updated', { ascending: false }); break;
     default: q = q.order('discount_percent', { ascending: false });
   }
-  q = q.range(filters.offset ?? 0, (filters.offset ?? 0) + (filters.limit ?? 24) - 1);
+  q = q.range(offset, offset + limit - 1);
 
   const { data, error } = await q;
   if (error) throw new Error(`[deals.repo] query failed: ${error.message}`);
-  return (data ?? []).map(fromRow);
+  return { deals: (data ?? []).map(fromRow), total };
+}
+
+/** Clamp the offset onto the start of the last page. */
+function clampOffset(offset: number, total: number, limit: number, withTotal: boolean): number {
+  const safe = Math.max(0, offset);
+  if (!withTotal || total <= 0) return safe;
+  const lastPageStart = Math.floor((total - 1) / limit) * limit;
+  return Math.min(safe, lastPageStart);
 }
 
 /**
