@@ -54,7 +54,9 @@ create index if not exists deals_brand_trgm_idx
 -- Distinct brands per country/category (burger-menu filters).
 create or replace function public.distinct_brands(p_country char(2), p_category text default null)
 returns table (brand text)
-language sql stable as $$
+language sql stable
+set search_path = public
+as $$
   select distinct d.brand
   from public.deals d
   where d.country = p_country
@@ -151,7 +153,9 @@ alter table public.transactions enable row level security;
 -- per UTC day even when the price is unchanged) is deliberately NOT this
 -- trigger's job — scripts/snapshot-prices.cjs owns it (see v3.1 FR-ING-7).
 create or replace function public.record_price_history()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql
+set search_path = public
+as $$
 begin
   if (TG_OP = 'INSERT') or (OLD.sale_price is distinct from NEW.sale_price) then
     insert into public.price_history (product_id, day, sale_price, original_price, currency, recorded_at)
@@ -172,7 +176,9 @@ create trigger trigger_record_price_history
 
 -- RPC function to batch calculate and update 90-day historical low prices
 create or replace function public.update_historical_lows_batch()
-returns void language sql as $$
+returns void language sql
+set search_path = public
+as $$
   update public.deals d
   set historical_low_price = sub.min_price
   from (
@@ -196,7 +202,9 @@ $$;
 --    (app toRow, ingest-awin.cjs) set slug explicitly; this only catches rows
 --    that arrive without one, so a NULL slug (→ 404 deal page) can never persist.
 create or replace function public.deal_slug(p_name text, p_product_id text)
-returns text language sql immutable as $$
+returns text language sql immutable
+set search_path = public
+as $$
   select trim(both '-' from
            regexp_replace(
              regexp_replace(lower(coalesce(p_name, '')), '[^a-z0-9]+', '-', 'g'),
@@ -206,7 +214,9 @@ returns text language sql immutable as $$
 $$;
 
 create or replace function public.deals_set_slug()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql
+set search_path = public
+as $$
 begin
   if NEW.slug is null or NEW.slug = '' then
     NEW.slug := public.deal_slug(NEW.product_name, NEW.product_id);
@@ -267,7 +277,9 @@ end $$;
 create or replace function public.purge_stale_price_alerts(
   retention_days int default 365,
   notified_days  int default 30)
-returns integer language plpgsql as $$
+returns integer language plpgsql
+set search_path = public
+as $$
 declare deleted integer;
 begin
   delete from public.price_alerts
