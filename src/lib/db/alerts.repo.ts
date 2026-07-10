@@ -11,13 +11,17 @@ import 'server-only';
 import { supabase, supabaseConfigured } from './supabase';
 import { dealsByIds } from './deals.repo';
 import { sendEmail } from '../email/send';
-import { unsubscribeUrl } from '../email/unsubscribe';
 import { formatPrice } from '../utils/format';
 import { generateUnsubscribeToken } from '../utils/crypto';
 import { decorateAffiliateUrl } from '../utils/affiliate';
+import { siteUrl } from '../utils/site-url';
 import type { NormalizedDeal } from '../providers/types';
 
 const TABLE = 'price_alerts';
+
+/** Cap on ids per PostgREST `.in()` — keeps the GET query-string well under any
+ *  URL length limit (a full 1000-id `.in()` would be a multi-KB URL → 414). */
+const IN_CHUNK = 200;
 
 /** Cap active alerts per email — blocks using /api/alerts to email-bomb someone. */
 export const MAX_ALERTS_PER_EMAIL = 50;
@@ -90,14 +94,21 @@ export async function notifyPriceDrops(deals: NormalizedDeal[]): Promise<number>
   if (!supabaseConfigured() || deals.length === 0) return 0;
 
   const byId = new Map(deals.map((d) => [d.productId, d]));
-  const { data, error } = await supabase()
-    .from(TABLE)
-    .select('id, email, target_price, product_id, locale')
-    .in('product_id', [...byId.keys()])
-    .eq('notified', false);
-  if (error) throw new Error(`[alerts.repo] query failed: ${error.message}`);
+  // Chunk the id set: notifyPendingAlerts can pass up to 1000 ids, and a single
+  // `.in()` with all of them is a multi-KB GET URL that risks a 414 at the edge.
+  const ids = [...byId.keys()];
+  const data: { id: unknown; email: unknown; target_price: unknown; product_id: unknown; locale: unknown }[] = [];
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const { data: rows, error } = await supabase()
+      .from(TABLE)
+      .select('id, email, target_price, product_id, locale')
+      .in('product_id', ids.slice(i, i + IN_CHUNK))
+      .eq('notified', false);
+    if (error) throw new Error(`[alerts.repo] query failed: ${error.message}`);
+    if (rows) data.push(...rows);
+  }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://dealradar.eu';
+  const appUrl = siteUrl();
   let sent = 0;
   for (const row of data ?? []) {
     const deal = byId.get(row.product_id as string);

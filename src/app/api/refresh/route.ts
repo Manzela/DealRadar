@@ -66,9 +66,12 @@ export async function POST(req: NextRequest) {
         const deals = await fetchDealsAcrossProviders({ country, category, limit: 100 });
         const realDeals = deals.filter((d) => isReal(d.source));
         skippedMock += deals.length - realDeals.length;
-        summary[country] += await upsertDeals(realDeals);
-        // Email anyone whose alert price has now been beaten by these deals.
-        notified += await notifyPriceDrops(realDeals);
+        // Resolve BEFORE the compound-assign: `x += await …` captures x's value
+        // pre-await, so concurrent workers would clobber each other's counts.
+        const upserted = await upsertDeals(realDeals);
+        const emailed = await notifyPriceDrops(realDeals);
+        summary[country] += upserted;
+        notified += emailed;
       } catch (e) {
         console.error(`[api/refresh] ${country}/${category} failed:`, e);
       }

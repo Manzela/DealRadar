@@ -10,6 +10,12 @@ import { CATEGORY_SLUGS, type CategorySlug } from '@/lib/providers/types';
 
 export const dynamic = 'force-dynamic';
 
+// Faceted search + sort=random mint an unbounded space of unique, thin,
+// duplicate-content URLs. Keep them out of the index (robots.ts allows /search).
+export function generateMetadata() {
+  return { robots: { index: false, follow: true } };
+}
+
 const PAGE_SIZE = 48;
 
 type SP = Record<string, string | string[] | undefined>;

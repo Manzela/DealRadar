@@ -14,6 +14,10 @@ import type { CategorySlug, CountryCode, DealQuery, NormalizedDeal } from '../pr
 
 const TABLE = 'deals';
 
+/** PostgREST caps every read at `db-max-rows` (default 1000) WITHOUT erroring, so
+ *  any unbounded scan must page explicitly or it silently truncates past 1000. */
+const REST_PAGE = 1000;
+
 /** Camel ⇄ snake mapping for the deals table. */
 function toRow(d: NormalizedDeal) {
   const generatedSlug = d.slug || `${slugify(d.productName)}-${d.productId.replace(/[^a-z0-9]/gi, '-')}`;
@@ -280,7 +284,9 @@ export async function getDealBySlug(slug: string, country?: CountryCode): Promis
     const deals = await fetchDealsAcrossProviders({ country: country || 'DE', limit: 500 });
     return deals.find((d) => d.slug === slug || slugify(d.productName) === slug) || null;
   }
-  let q = supabase().from(TABLE).select('*').eq('slug', slug);
+  // Exclude hidden (sold-out/delisted) deals: a hidden slug must 404, not render
+  // publicly with a hardcoded InStock badge or seed the sitemap.
+  let q = supabase().from(TABLE).select('*').eq('slug', slug).eq('hidden', false);
   if (country) q = q.eq('country', country);
   const { data, error } = await q.maybeSingle();
   if (error) {
@@ -297,17 +303,26 @@ export async function getDealBySlug(slug: string, country?: CountryCode): Promis
  */
 export async function getRecentlyUpdatedDeals(sinceIso: string): Promise<NormalizedDeal[]> {
   if (!supabaseConfigured()) return [];
-  const { data, error } = await supabase()
-    .from(TABLE)
-    .select('*')
-    .gte('last_updated', sinceIso)
-    .order('last_updated', { ascending: false })
-    .limit(5000);
-  if (error) {
-    console.error('[deals.repo] getRecentlyUpdatedDeals failed:', error.message);
-    return [];
+  const out: NormalizedDeal[] = [];
+  // Page explicitly: a busy ingest window can update >1000 deals, which the
+  // 1000-row REST cap would silently truncate — dropping alert-eligible drops.
+  for (let offset = 0; ; offset += REST_PAGE) {
+    const { data, error } = await supabase()
+      .from(TABLE)
+      .select('*')
+      .eq('hidden', false)
+      .gte('last_updated', sinceIso)
+      .order('last_updated', { ascending: false })
+      .range(offset, offset + REST_PAGE - 1);
+    if (error) {
+      console.error('[deals.repo] getRecentlyUpdatedDeals failed:', error.message);
+      return out;
+    }
+    const rows = data ?? [];
+    out.push(...rows.map(fromRow));
+    if (rows.length < REST_PAGE) break;
   }
-  return (data ?? []).map(fromRow);
+  return out;
 }
 
 /**
@@ -315,21 +330,31 @@ export async function getRecentlyUpdatedDeals(sinceIso: string): Promise<Normali
  * globally unique, so one query covers Awin/Kelkoo/Tradedoubler/Strackr alike.
  * Dev/mock fallback samples the registry so the sitemap is non-empty locally.
  */
-export async function getAllDealSlugs(limit = 5000): Promise<{ slug: string; lastUpdated: string }[]> {
+export async function getAllDealSlugs(): Promise<{ slug: string; lastUpdated: string }[]> {
   if (!supabaseConfigured()) {
     const deals = await fetchDealsAcrossProviders({ country: 'DE', limit: 200 });
     return deals.map((d) => ({ slug: d.slug || slugify(d.productName), lastUpdated: d.lastUpdated }));
   }
-  const { data, error } = await supabase()
-    .from(TABLE)
-    .select('slug,last_updated')
-    .not('slug', 'is', null)
-    .limit(limit);
-  if (error) {
-    console.error('[deals.repo] getAllDealSlugs failed:', error.message);
-    return [];
+  const out: { slug: string; lastUpdated: string }[] = [];
+  // Page explicitly past the 1000-row REST cap and exclude hidden deals — a
+  // hidden/delisted deal must never appear in the sitemap.
+  for (let offset = 0; ; offset += REST_PAGE) {
+    const { data, error } = await supabase()
+      .from(TABLE)
+      .select('slug,last_updated')
+      .eq('hidden', false)
+      .not('slug', 'is', null)
+      .order('slug', { ascending: true })
+      .range(offset, offset + REST_PAGE - 1);
+    if (error) {
+      console.error('[deals.repo] getAllDealSlugs failed:', error.message);
+      return out;
+    }
+    const rows = data ?? [];
+    out.push(...rows.map((r) => ({ slug: r.slug as string, lastUpdated: r.last_updated as string })));
+    if (rows.length < REST_PAGE) break;
   }
-  return (data ?? []).map((r) => ({ slug: r.slug as string, lastUpdated: r.last_updated as string }));
+  return out;
 }
 
 export async function updateHistoricalLows(): Promise<void> {
