@@ -1,6 +1,5 @@
 import { cache } from 'react';
 import { notFound } from 'next/navigation';
-import Image from 'next/image';
 import Link from 'next/link';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { getDealBySlug } from '@/lib/db/deals.repo';
@@ -10,10 +9,17 @@ import { priceWindow } from '@/lib/utils/price-history';
 import { queryPriceHistory } from '@/lib/db/price-history.repo';
 import { PriceAlertButton } from '@/components/deals/PriceAlertButton';
 import { PriceHeatBar } from '@/components/deals/PriceHeatBar';
+import { DealGallery } from '@/components/deals/DealGallery';
 import { SponsoredBadge } from '@/components/deals/SponsoredBadge';
+import { productGallery } from '@/lib/utils/product-details';
 import { Badge } from '@/components/ui/badge';
 import { routing } from '@/i18n/routing';
 import { siteUrl } from '@/lib/utils/site-url';
+
+// Always render from live data — like the category/search pages. Without this
+// Next caches the Supabase fetches, so the daily price verifier's updates (and
+// gallery enrichment) would not appear until the next deploy: stale prices.
+export const dynamic = 'force-dynamic';
 
 interface Props {
   readonly params: { readonly locale: string; readonly slug: string };
@@ -115,16 +121,16 @@ export default async function DealDetailPage({ params }: Props) {
       </div>
 
       <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-        <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-white p-6 shadow-sm">
-          {deal.imageUrl ? (
-            <Image src={deal.imageUrl} alt={deal.productName} fill priority className="object-contain" />
-          ) : (
-            <div className="flex h-full items-center justify-center text-zinc-400">—</div>
-          )}
-          <Badge variant="deal" className="absolute left-4 top-4 text-lg">
-            {formatDiscount(deal.discountPercent)}
-          </Badge>
-        </div>
+        {/* Real multi-image gallery (full-res merchant photos), as the retired modal had. */}
+        <DealGallery
+          images={productGallery(deal)}
+          alt={deal.productName}
+          badge={
+            <Badge variant="deal" className="absolute left-4 top-4 text-lg">
+              {formatDiscount(deal.discountPercent)}
+            </Badge>
+          }
+        />
 
         <div className="flex flex-col justify-between">
           <div>
@@ -180,6 +186,14 @@ export default async function DealDetailPage({ params }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Real product description from the feed, as the retired modal showed. */}
+      {deal.description && (
+        <div className="mt-8 border-t border-zinc-100 pt-6">
+          <h2 className="mb-2 text-sm font-semibold text-zinc-900">{t('details')}</h2>
+          <p className="whitespace-pre-line text-sm leading-relaxed text-zinc-600">{deal.description}</p>
+        </div>
+      )}
     </div>
   );
 }
