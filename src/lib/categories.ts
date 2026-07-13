@@ -141,3 +141,29 @@ export const CATEGORIES: Category[] = [
     ],
   },
 ];
+
+/**
+ * Best subcategory for a product, derived the same way search works: a leaf
+ * term (or the subcategory name) appearing in the product name. Substring,
+ * case-insensitive — German compounds ("Wildkamera" → 'Kamera') have no word
+ * boundaries, and the site's search matches leaves the same way. The LONGEST
+ * matching term wins so 'Solar-Erweiterungsset' beats 'Solarmodul'.
+ * Used by the deal-page breadcrumb: Home › category › subcategory › product.
+ */
+export function matchSubCategory(
+  slug: CategorySlug,
+  productName: string,
+): { name: string; leaf: string } | null {
+  const category = CATEGORIES.find((c) => c.slug === slug);
+  if (!category) return null;
+  const hay = productName.toLowerCase();
+  let best: { name: string; leaf: string; len: number } | null = null;
+  for (const sub of category.children) {
+    for (const term of [...(sub.children ?? []), sub.name]) {
+      if (term.length > (best?.len ?? 0) && hay.includes(term.toLowerCase())) {
+        best = { name: sub.name, leaf: term, len: term.length };
+      }
+    }
+  }
+  return best ? { name: best.name, leaf: best.leaf } : null;
+}

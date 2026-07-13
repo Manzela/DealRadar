@@ -15,6 +15,8 @@ import { productGallery } from '@/lib/utils/product-details';
 import { Badge } from '@/components/ui/badge';
 import { routing } from '@/i18n/routing';
 import { siteUrl } from '@/lib/utils/site-url';
+import { matchSubCategory } from '@/lib/categories';
+import { categoryTerm } from '@/lib/categories-i18n';
 
 // Always render from live data — like the category/search pages. Without this
 // Next caches the Supabase fetches, so the daily price verifier's updates (and
@@ -58,6 +60,7 @@ export default async function DealDetailPage({ params }: Props) {
   const deal = await getDeal(params.slug);
   if (!deal) notFound();
   const t = await getTranslations('deal');
+  const tCat = await getTranslations('categories');
 
   const affiliateUrl = decorateAffiliateUrl(deal.shopUrl, deal.source, deal.country, deal.category, deal.productId);
   // Recorded daily prices widen the window: low = recorded minimum, so the
@@ -107,18 +110,64 @@ export default async function DealDetailPage({ params }: Props) {
     timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit',
   });
 
+  // Breadcrumb trail: Home › category › subcategory (no product-name crumb) —
+  // the visible answer to "which category is this deal in". The subcategory is
+  // derived by matching the product name against the category tree's leaf
+  // search terms (same mechanism as the category menu), and links to that
+  // leaf's search so the crumb lists similar products. Skipped when nothing
+  // matches.
+  const categoryLabel = tCat(deal.category);
+  const sub = matchSubCategory(deal.category, deal.productName);
+  const subCrumb = sub
+    ? {
+        label: categoryTerm(sub.name, params.locale),
+        href: `/${params.locale}/search?category=${deal.category}&q=${encodeURIComponent(sub.leaf)}`,
+      }
+    : null;
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org/',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: t('breadcrumbHome'), item: `${BASE_URL}/${params.locale}` },
+      { '@type': 'ListItem', position: 2, name: categoryLabel, item: `${BASE_URL}/${params.locale}/category/${deal.category}` },
+      ...(subCrumb ? [{ '@type': 'ListItem', position: 3, name: subCrumb.label, item: `${BASE_URL}${subCrumb.href}` }] : []),
+    ],
+  };
+
   // Escape `<` so a feed value containing `</script>` (productName/shopName come
   // from third-party affiliate feeds) can't break out of the JSON-LD block — XSS.
   const jsonLdHtml = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
+  const breadcrumbJsonLdHtml = JSON.stringify(breadcrumbJsonLd).replace(/</g, '\\u003c');
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml }} />
-      <div className="mb-4">
-        <Link href={`/${params.locale}`} className="text-sm text-zinc-500 hover:underline">
-          &larr; {t('backToDeals')}
-        </Link>
-      </div>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: breadcrumbJsonLdHtml }} />
+      <nav aria-label="Breadcrumb" className="mb-4 text-sm text-zinc-500">
+        <ol className="flex flex-wrap items-center gap-1.5">
+          <li>
+            <Link href={`/${params.locale}`} className="hover:underline">
+              {t('breadcrumbHome')}
+            </Link>
+          </li>
+          <li aria-hidden>›</li>
+          <li>
+            <Link href={`/${params.locale}/category/${deal.category}`} className="hover:underline">
+              {categoryLabel}
+            </Link>
+          </li>
+          {subCrumb && (
+            <>
+              <li aria-hidden>›</li>
+              <li>
+                <Link href={subCrumb.href} className="hover:underline">
+                  {subCrumb.label}
+                </Link>
+              </li>
+            </>
+          )}
+        </ol>
+      </nav>
 
       <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
         {/* Real multi-image gallery (full-res merchant photos), as the retired modal had. */}

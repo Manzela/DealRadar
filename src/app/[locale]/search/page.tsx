@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { DealGrid } from '@/components/deals/DealGrid';
-import { FilterPanel } from '@/components/search/FilterPanel';
+import { FilterBar } from '@/components/search/FilterBar';
 import { Pagination } from '@/components/search/Pagination';
 import { queryDealsPaged, distinctBrands, type DealFilters } from '@/lib/db/deals.repo';
 import { randomSeed } from '@/lib/utils/rng';
@@ -81,8 +81,8 @@ export default async function SearchPage({
   if (seed !== undefined) linkParams.seed = String(seed); // keep this shuffle across pages
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[240px_1fr]">
-      <FilterPanel brands={brands} category={category} />
+    <div>
+      <FilterBar brands={brands} />
       <section aria-live="polite">
         <h1 className="mb-6 text-xl font-semibold tracking-tight">
           {filters.q ? t('resultsFor', { q: filters.q }) : t('allResults')}
