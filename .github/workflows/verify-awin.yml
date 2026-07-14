@@ -45,6 +45,20 @@ jobs:
             node scripts/verify-awin.cjs --apply
           fi
 
+      # Top up sparse galleries from the live shop (feeds like BlazeVideo ship
+      # a single image; the deal page should show the same multi-image gallery
+      # for every product). Only touches deals with fewer than 2 real images.
+      - name: Enrich sparse galleries from live shops
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            node scripts/enrich-galleries.cjs
+          else
+            node scripts/enrich-galleries.cjs --apply
+          fi
+
       # Re-snapshot today's prices now that they are live-verified — same UTC
       # day as the ingest's snapshot, so this upsert overwrites it and the
       # verified price is what price_history keeps for the day.

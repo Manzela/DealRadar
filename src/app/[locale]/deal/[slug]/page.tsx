@@ -1,18 +1,27 @@
 import { cache } from 'react';
 import { notFound } from 'next/navigation';
-import Image from 'next/image';
 import Link from 'next/link';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { getDealBySlug } from '@/lib/db/deals.repo';
 import { formatPrice, formatDiscount } from '@/lib/utils/format';
 import { decorateAffiliateUrl } from '@/lib/utils/affiliate';
 import { priceWindow } from '@/lib/utils/price-history';
+import { queryPriceHistory } from '@/lib/db/price-history.repo';
 import { PriceAlertButton } from '@/components/deals/PriceAlertButton';
 import { PriceHeatBar } from '@/components/deals/PriceHeatBar';
+import { DealGallery } from '@/components/deals/DealGallery';
 import { SponsoredBadge } from '@/components/deals/SponsoredBadge';
+import { productGallery } from '@/lib/utils/product-details';
 import { Badge } from '@/components/ui/badge';
 import { routing } from '@/i18n/routing';
 import { siteUrl } from '@/lib/utils/site-url';
+import { matchSubCategory } from '@/lib/categories';
+import { categoryTerm } from '@/lib/categories-i18n';
+
+// Always render from live data — like the category/search pages. Without this
+// Next caches the Supabase fetches, so the daily price verifier's updates (and
+// gallery enrichment) would not appear until the next deploy: stale prices.
+export const dynamic = 'force-dynamic';
 
 interface Props {
   readonly params: { readonly locale: string; readonly slug: string };
@@ -51,9 +60,14 @@ export default async function DealDetailPage({ params }: Props) {
   const deal = await getDeal(params.slug);
   if (!deal) notFound();
   const t = await getTranslations('deal');
+  const tCat = await getTranslations('categories');
 
   const affiliateUrl = decorateAffiliateUrl(deal.shopUrl, deal.source, deal.country, deal.category, deal.productId);
-  const pw = priceWindow(deal);
+  // Recorded daily prices widen the window: low = recorded minimum, so the
+  // today-dot sits at its true position instead of pinned at the green end.
+  // Best-effort — on any DB error the graph keeps its honest two-point fallback.
+  const history = await queryPriceHistory(deal.productId).catch(() => []);
+  const pw = priceWindow(deal, history.map((p) => p.salePrice));
   const dealUrl = `${BASE_URL}/${params.locale}/deal/${params.slug}`;
 
   // [FR-GEO-1 / P-3] Product + single Offer + itemCondition — built per-item from
@@ -96,30 +110,76 @@ export default async function DealDetailPage({ params }: Props) {
     timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit',
   });
 
+  // Breadcrumb trail: Home › category › subcategory (no product-name crumb) —
+  // the visible answer to "which category is this deal in". The subcategory is
+  // derived by matching the product name against the category tree's leaf
+  // search terms (same mechanism as the category menu), and links to that
+  // leaf's search so the crumb lists similar products. Skipped when nothing
+  // matches.
+  const categoryLabel = tCat(deal.category);
+  const sub = matchSubCategory(deal.category, deal.productName);
+  const subCrumb = sub
+    ? {
+        label: categoryTerm(sub.name, params.locale),
+        href: `/${params.locale}/search?category=${deal.category}&q=${encodeURIComponent(sub.leaf)}`,
+      }
+    : null;
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org/',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: t('breadcrumbHome'), item: `${BASE_URL}/${params.locale}` },
+      { '@type': 'ListItem', position: 2, name: categoryLabel, item: `${BASE_URL}/${params.locale}/category/${deal.category}` },
+      ...(subCrumb ? [{ '@type': 'ListItem', position: 3, name: subCrumb.label, item: `${BASE_URL}${subCrumb.href}` }] : []),
+    ],
+  };
+
   // Escape `<` so a feed value containing `</script>` (productName/shopName come
   // from third-party affiliate feeds) can't break out of the JSON-LD block — XSS.
   const jsonLdHtml = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
+  const breadcrumbJsonLdHtml = JSON.stringify(breadcrumbJsonLd).replace(/</g, '\\u003c');
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml }} />
-      <div className="mb-4">
-        <Link href={`/${params.locale}`} className="text-sm text-zinc-500 hover:underline">
-          &larr; {t('backToDeals')}
-        </Link>
-      </div>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: breadcrumbJsonLdHtml }} />
+      <nav aria-label="Breadcrumb" className="mb-4 text-sm text-zinc-500">
+        <ol className="flex flex-wrap items-center gap-1.5">
+          <li>
+            <Link href={`/${params.locale}`} className="hover:underline">
+              {t('breadcrumbHome')}
+            </Link>
+          </li>
+          <li aria-hidden>›</li>
+          <li>
+            <Link href={`/${params.locale}/category/${deal.category}`} className="hover:underline">
+              {categoryLabel}
+            </Link>
+          </li>
+          {subCrumb && (
+            <>
+              <li aria-hidden>›</li>
+              <li>
+                <Link href={subCrumb.href} className="hover:underline">
+                  {subCrumb.label}
+                </Link>
+              </li>
+            </>
+          )}
+        </ol>
+      </nav>
 
       <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-        <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-white p-6 shadow-sm">
-          {deal.imageUrl ? (
-            <Image src={deal.imageUrl} alt={deal.productName} fill priority className="object-contain" />
-          ) : (
-            <div className="flex h-full items-center justify-center text-zinc-400">—</div>
-          )}
-          <Badge variant="deal" className="absolute left-4 top-4 text-lg">
-            {formatDiscount(deal.discountPercent)}
-          </Badge>
-        </div>
+        {/* Real multi-image gallery (full-res merchant photos), as the retired modal had. */}
+        <DealGallery
+          images={productGallery(deal)}
+          alt={deal.productName}
+          badge={
+            <Badge variant="deal" className="absolute left-4 top-4 text-lg">
+              {formatDiscount(deal.discountPercent)}
+            </Badge>
+          }
+        />
 
         <div className="flex flex-col justify-between">
           <div>
@@ -175,6 +235,14 @@ export default async function DealDetailPage({ params }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Real product description from the feed, as the retired modal showed. */}
+      {deal.description && (
+        <div className="mt-8 border-t border-zinc-100 pt-6">
+          <h2 className="mb-2 text-sm font-semibold text-zinc-900">{t('details')}</h2>
+          <p className="whitespace-pre-line text-sm leading-relaxed text-zinc-600">{deal.description}</p>
+        </div>
+      )}
     </div>
   );
 }
