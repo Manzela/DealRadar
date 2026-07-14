@@ -21,16 +21,20 @@ const get = async (path) => {
   return { status: res.status, headers: res.headers, body };
 };
 
-// 1. robots.txt points its sitemap at the prod host.
+// 1. robots.txt: prod-host sitemap, AI-crawler groups present, crawl traps blocked.
 {
   const r = await get('/robots.txt');
   check('robots.txt 200', r.status === 200, `status=${r.status}`);
   check('robots.txt sitemap → dealradar.me', r.body.includes(`${BASE}/sitemap.xml`), r.body.match(/Sitemap:.*/i)?.[0] || 'no Sitemap line');
+  for (const ua of ['OAI-SearchBot', 'GPTBot', 'ClaudeBot', 'PerplexityBot']) {
+    check(`robots has explicit ${ua} group`, new RegExp(`User-Agent:\\s*${ua}`, 'i').test(r.body), 'group missing');
+  }
+  check('robots blocks internal search (/*/search)', r.body.includes('/*/search'), 'trap not blocked');
+  check('robots blocks seed trap (/*?*seed=)', r.body.includes('/*?*seed='), 'trap not blocked');
 }
 
-// 2. sitemap: prod-host deal URLs, zero .eu, not a stale empty build — and the
-// crawler-facing contract: XML content-type, XML declaration, sitemaps.org
-// namespace, and honest lastmod (static entries must NOT stamp "now").
+// 2. sitemap INDEX + children: XML contract, prod-host deal URLs, zero .eu,
+// every child under the 2 MB page-load budget, honest lastmod.
 let sampleDealPath = null;
 {
   const r = await get('/sitemap.xml');
@@ -38,15 +42,27 @@ let sampleDealPath = null;
   const ct = r.headers.get('content-type') || '';
   check('sitemap Content-Type is XML', /\b(application|text)\/xml\b/.test(ct), ct || 'absent');
   check('sitemap starts with <?xml declaration', r.body.trimStart().startsWith('<?xml'), r.body.slice(0, 40));
-  check('sitemap has sitemaps.org urlset namespace', r.body.includes('http://www.sitemaps.org/schemas/sitemap/0.9'), 'namespace missing');
-  const eu = (r.body.match(/dealradar\.eu/g) || []).length;
-  const dealUrls = [...r.body.matchAll(/<loc>(https:\/\/[^<]*\/deal\/[^<]+)<\/loc>/g)].map((m) => m[1]);
-  check('sitemap has ZERO dealradar.eu', eu === 0, `eu=${eu}`);
-  check('sitemap lists deal URLs (>50, DB has ~835)', dealUrls.length > 50, `dealUrls=${dealUrls.length}`);
-  // Home is the first <url> block; a <lastmod> there = fabricated always-"now"
-  // timestamp, which teaches Google to distrust lastmod sitewide.
-  const homeBlock = r.body.match(/<url>[\s\S]*?<\/url>/)?.[0] || '';
-  check('home entry omits fabricated lastmod', !homeBlock.includes('<lastmod>'), homeBlock.includes('<lastmod>') ? 'static entry stamps now()' : 'omitted');
+  check('sitemap.xml is a sitemap INDEX', r.body.includes('<sitemapindex'), 'no <sitemapindex> root');
+  const children = [...r.body.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  check('index lists static + ≥1 deals child', children.some((c) => c.includes('/sitemaps/static.xml')) && children.some((c) => c.includes('/sitemaps/deals-1.xml')), children.join(', ').slice(0, 120));
+  check('index children on prod host, zero .eu', children.length > 0 && children.every((c) => c.startsWith(`${BASE}/`)), 'wrong host in child loc');
+
+  // static child: urlset + hreflang + NO fabricated lastmod
+  const st = await get('/sitemaps/static.xml');
+  check('static child 200 + urlset', st.status === 200 && st.body.includes('http://www.sitemaps.org/schemas/sitemap/0.9'), `status=${st.status}`);
+  const homeBlock = st.body.match(/<url>[\s\S]*?<\/url>/)?.[0] || '';
+  check('static child omits fabricated lastmod', !homeBlock.includes('<lastmod>'), homeBlock.includes('<lastmod>') ? 'static entry stamps now()' : 'omitted');
+  check('static child carries hreflang alternates', homeBlock.includes('xhtml:link'), 'no alternates');
+
+  // first deals child: deal URLs, real lastmod, zero .eu, < 2 MB
+  const d1 = await get('/sitemaps/deals-1.xml');
+  check('deals-1 child 200 + urlset', d1.status === 200 && d1.body.includes('<urlset'), `status=${d1.status}`);
+  const dealUrls = [...d1.body.matchAll(/<loc>(https:\/\/[^<]*\/deal\/[^<]+)<\/loc>/g)].map((m) => m[1]);
+  check('deals-1 lists deal URLs (>50)', dealUrls.length > 50, `dealUrls=${dealUrls.length}`);
+  check('deals-1 has ZERO dealradar.eu', !d1.body.includes('dealradar.eu'), 'eu leaked');
+  const mb = Buffer.byteLength(d1.body, 'utf8') / 1024 / 1024;
+  check('deals-1 under the 2 MB budget', mb < 2, `${mb.toFixed(2)} MB (chunking at 500/sitemap)`);
+  check('deals-1 entries carry real lastmod', d1.body.includes('<lastmod>'), 'lastmod missing');
   if (dealUrls[0]) sampleDealPath = dealUrls[0].replace(BASE, '');
 }
 
