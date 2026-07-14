@@ -77,3 +77,15 @@ jobs:
           else
             node scripts/snapshot-prices.cjs --apply
           fi
+
+      # Ping IndexNow with every deal this run touched (new deals, price
+      # changes, stale-hides → 404 refresh) so Bing/Yandex/Seznam/Naver
+      # re-crawl within minutes. Non-blocking: an indexing ping must never
+      # fail the ingestion. Google gets freshness via the sitemap's lastmod.
+      - name: Submit changed deals to IndexNow
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/indexnow-submit.cjs --since 3

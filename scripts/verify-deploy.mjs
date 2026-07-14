@@ -33,6 +33,14 @@ const get = async (path) => {
   check('robots blocks seed trap (/*?*seed=)', r.body.includes('/*?*seed='), 'trap not blocked');
 }
 
+// 1b. IndexNow key file — engines validate it on every submission; if it 404s,
+// all IndexNow pings start silently failing.
+{
+  const KEY = '36c4f6d24ff2c383742acbda6243bb20';
+  const r = await get(`/${KEY}.txt`);
+  check('IndexNow key file served', r.status === 200 && r.body.trim() === KEY, `status=${r.status}`);
+}
+
 // 2. sitemap INDEX + children: XML contract, prod-host deal URLs, zero .eu,
 // every child under the 2 MB page-load budget, honest lastmod.
 let sampleDealPath = null;

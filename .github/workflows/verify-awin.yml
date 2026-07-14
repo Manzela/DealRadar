@@ -72,3 +72,14 @@ jobs:
           else
             node scripts/snapshot-prices.cjs --apply
           fi
+
+      # Ping IndexNow with everything the verifier changed (live price
+      # corrections, sold-out hides → 404 refresh). Non-blocking; the verify
+      # pass takes up to ~30 min, so the window is wider than the ingest's.
+      - name: Submit changed deals to IndexNow
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/indexnow-submit.cjs --since 3
