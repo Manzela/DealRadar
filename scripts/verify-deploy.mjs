@@ -28,15 +28,25 @@ const get = async (path) => {
   check('robots.txt sitemap → dealradar.me', r.body.includes(`${BASE}/sitemap.xml`), r.body.match(/Sitemap:.*/i)?.[0] || 'no Sitemap line');
 }
 
-// 2. sitemap: prod-host deal URLs, zero .eu, not a stale empty build.
+// 2. sitemap: prod-host deal URLs, zero .eu, not a stale empty build — and the
+// crawler-facing contract: XML content-type, XML declaration, sitemaps.org
+// namespace, and honest lastmod (static entries must NOT stamp "now").
 let sampleDealPath = null;
 {
   const r = await get('/sitemap.xml');
   check('sitemap.xml 200', r.status === 200, `status=${r.status}`);
+  const ct = r.headers.get('content-type') || '';
+  check('sitemap Content-Type is XML', /\b(application|text)\/xml\b/.test(ct), ct || 'absent');
+  check('sitemap starts with <?xml declaration', r.body.trimStart().startsWith('<?xml'), r.body.slice(0, 40));
+  check('sitemap has sitemaps.org urlset namespace', r.body.includes('http://www.sitemaps.org/schemas/sitemap/0.9'), 'namespace missing');
   const eu = (r.body.match(/dealradar\.eu/g) || []).length;
   const dealUrls = [...r.body.matchAll(/<loc>(https:\/\/[^<]*\/deal\/[^<]+)<\/loc>/g)].map((m) => m[1]);
   check('sitemap has ZERO dealradar.eu', eu === 0, `eu=${eu}`);
   check('sitemap lists deal URLs (>50, DB has ~835)', dealUrls.length > 50, `dealUrls=${dealUrls.length}`);
+  // Home is the first <url> block; a <lastmod> there = fabricated always-"now"
+  // timestamp, which teaches Google to distrust lastmod sitewide.
+  const homeBlock = r.body.match(/<url>[\s\S]*?<\/url>/)?.[0] || '';
+  check('home entry omits fabricated lastmod', !homeBlock.includes('<lastmod>'), homeBlock.includes('<lastmod>') ? 'static entry stamps now()' : 'omitted');
   if (dealUrls[0]) sampleDealPath = dealUrls[0].replace(BASE, '');
 }
 

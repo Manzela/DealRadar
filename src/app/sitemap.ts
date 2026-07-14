@@ -25,7 +25,11 @@ function entry(
   return {
     // Canonical URL is the default-locale variant; alternates enumerate the rest.
     url: `${BASE_URL}/${routing.defaultLocale}${path}`,
-    lastModified: opts.lastModified ?? new Date(),
+    // lastmod only when we KNOW the real modification time (deal rows carry
+    // last_updated). Never stamp new Date(): an always-"now" lastmod on every
+    // regeneration is provably inaccurate, and Google ignores lastmod sitewide
+    // once it catches the sitemap lying — devaluing the honest deal timestamps.
+    ...(opts.lastModified ? { lastModified: opts.lastModified } : {}),
     changeFrequency: opts.changeFrequency,
     priority: opts.priority,
     alternates: alternates(path),
@@ -48,12 +52,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const deals = await getAllDealSlugs();
     for (const d of deals) {
-      const lastModified = d.lastUpdated ? new Date(d.lastUpdated) : new Date();
+      const lastModified = d.lastUpdated ? new Date(d.lastUpdated) : null;
       routes.push(
         entry(`/deal/${d.slug}`, {
           changeFrequency: 'daily',
           priority: 0.9,
-          lastModified: Number.isNaN(lastModified.getTime()) ? new Date() : lastModified,
+          // Omit (never fake) lastmod when the row lacks a parseable timestamp.
+          ...(lastModified && !Number.isNaN(lastModified.getTime()) ? { lastModified } : {}),
         }),
       );
     }
