@@ -17,7 +17,6 @@ import { GeoConsentPrompt } from '@/components/gdpr/GeoConsentPrompt';
 import { parseLocationCookie, LOCATION_COOKIE } from '@/lib/geo/resolve';
 import { initProviders } from '@/lib/providers/registry';
 import { siteUrl } from '@/lib/utils/site-url';
-import { GA_ID } from '@/lib/analytics/gtag';
 import '../globals.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
@@ -71,44 +70,8 @@ export default async function LocaleLayout({
   const cookieStore = await cookies();
   const initialLocation = parseLocationCookie(cookieStore.get(LOCATION_COOKIE)?.value);
 
-  const consentCookie = cookieStore.get('cc_cookie')?.value;
-  let hasConsent = false;
-  if (consentCookie) {
-    try {
-      const parsed = JSON.parse(decodeURIComponent(consentCookie));
-      hasConsent = Array.isArray(parsed.categories) && parsed.categories.includes('analytics');
-    } catch {
-      // ignore
-    }
-  }
-
   return (
     <html lang={locale} className={inter.variable}>
-      <head>
-        {/* Google tag (gtag.js) */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){window.dataLayer.push(arguments);}
-              ${!hasConsent ? `window['ga-disable-${GA_ID}'] = true;` : ''}
-              gtag('consent', 'default', {
-                'ad_storage': 'denied',
-                'ad_user_data': 'denied',
-                'ad_personalization': 'denied',
-                'analytics_storage': 'denied',
-                'wait_for_update': 500
-              });
-              gtag('js', new Date());
-              gtag('config', '${GA_ID}', {
-                'allow_google_signals': false,
-                'allow_ad_personalization_signals': false
-              });
-            `,
-          }}
-        />
-        <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`} />
-      </head>
       <body className="font-sans">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ORG_JSONLD }} />
         <NextIntlClientProvider messages={messages}>
