@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { buildSubId, decodeSubId } from '@/lib/utils/affiliate';
+import { signPostbackBody } from '@/lib/utils/crypto';
 
 // Capture what the route writes to `transactions`, and let a test force one 23503.
-const h = vi.hoisted(() => ({ upserts: [] as any[], failNext23503: false }));
+const h = vi.hoisted(() => ({ upserts: [] as any[], failNext23503: false, seenSignatures: new Set<string>() }));
 
 vi.mock('@/lib/db/supabase', () => ({
   supabaseConfigured: () => true,
@@ -21,23 +22,37 @@ vi.mock('@/lib/db/supabase', () => ({
   }),
 }));
 
+// Deterministic stand-ins for the Redis-backed helpers: rate limiting always
+// succeeds (rate-limit behavior is covered separately in redis.test.ts), and
+// the signature-replay claim is a real in-memory "first claim wins" set — the
+// same contract Upstash's SET NX EX gives us, just without a live Redis.
+vi.mock('@/lib/cache/redis', () => ({
+  rateLimitPostbacks: async () => ({ success: true }),
+  claimPostbackSignature: async (sig: string) => {
+    if (h.seenSignatures.has(sig)) return false;
+    h.seenSignatures.add(sig);
+    return true;
+  },
+}));
+
 import { POST, GET } from './route';
 
 const SECRET = 'test-webhook-secret';
 
-function req(method: 'POST' | 'GET', qs: string, body?: unknown) {
+function req(method: 'POST' | 'GET', qs: string, body?: unknown, extraHeaders?: Record<string, string>) {
   const url = `https://dealradar.me/api/postbacks?${qs}`;
   return new NextRequest(url, {
     method,
     ...(body !== undefined
-      ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
-      : {}),
+      ? { headers: { 'content-type': 'application/json', ...extraHeaders }, body: JSON.stringify(body) }
+      : { headers: extraHeaders }),
   });
 }
 
 beforeEach(() => {
   h.upserts.length = 0;
   h.failNext23503 = false;
+  h.seenSignatures.clear();
   process.env.WEBHOOK_SECRET = SECRET;
 });
 
@@ -135,5 +150,94 @@ describe('GET /api/postbacks (query-string postbacks)', () => {
     expect(h.upserts[0].product_id).toBe('awin:DE:9');
     expect(h.upserts[0].raw_payload.secret).toBeUndefined();
     expect(JSON.stringify(h.upserts[0].raw_payload)).not.toContain(SECRET);
+  });
+});
+
+describe('POST /api/postbacks — HMAC signature (opt-in primary auth path)', () => {
+  it('accepts a validly signed postback with NO query-string secret at all', async () => {
+    const clickref = buildSubId('DE', 'electronics', 'awin:DE:sig-ok');
+    const payload = { transaction_id: 'tx-sig-ok', network: 'awin', commission_earned: 4.2, status: 'approved', clickref };
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = signPostbackBody(SECRET, timestamp, JSON.stringify(payload));
+
+    const res = await POST(req('POST', '', payload, { 'x-timestamp': String(timestamp), 'x-signature': signature }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, persisted: true });
+    expect(h.upserts[0].transaction_id).toBe('tx-sig-ok');
+    expect(h.upserts[0].product_id).toBe('awin:DE:sig-ok');
+  });
+
+  it('rejects a tampered body — valid signature, but for a DIFFERENT body than what was sent', async () => {
+    const original = { transaction_id: 'tx-tamper', network: 'awin', commission_earned: 1 };
+    const tampered = { ...original, commission_earned: 999 };
+    const timestamp = Math.floor(Date.now() / 1000);
+    // Sign the ORIGINAL payload but send the TAMPERED one on the wire.
+    const signature = signPostbackBody(SECRET, timestamp, JSON.stringify(original));
+
+    const res = await POST(req('POST', '', tampered, { 'x-timestamp': String(timestamp), 'x-signature': signature }));
+
+    expect(res.status).toBe(401);
+    expect(await res.json()).toMatchObject({ error: 'invalid_signature' });
+    expect(h.upserts).toHaveLength(0);
+  });
+
+  it('rejects a signed request with no X-Timestamp header', async () => {
+    const payload = { transaction_id: 'tx-no-ts', network: 'awin', commission_earned: 1 };
+    const signature = signPostbackBody(SECRET, Math.floor(Date.now() / 1000), JSON.stringify(payload));
+
+    const res = await POST(req('POST', '', payload, { 'x-signature': signature }));
+
+    expect(res.status).toBe(401);
+    expect(await res.json()).toMatchObject({ error: 'missing_timestamp' });
+    expect(h.upserts).toHaveLength(0);
+  });
+
+  it('rejects a stale timestamp outside the ±5-minute replay window (replay guard)', async () => {
+    const payload = { transaction_id: 'tx-stale', network: 'awin', commission_earned: 1 };
+    const staleTimestamp = Math.floor(Date.now() / 1000) - 10 * 60; // 10 min old
+    const signature = signPostbackBody(SECRET, staleTimestamp, JSON.stringify(payload));
+
+    const res = await POST(req('POST', '', payload, { 'x-timestamp': String(staleTimestamp), 'x-signature': signature }));
+
+    expect(res.status).toBe(401);
+    expect(await res.json()).toMatchObject({ error: 'stale_timestamp' });
+    expect(h.upserts).toHaveLength(0);
+  });
+
+  it('rejects a signature that has already been used once (replay guard, dedicated nonce check)', async () => {
+    const payload = { transaction_id: 'tx-replay', network: 'awin', commission_earned: 1 };
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = signPostbackBody(SECRET, timestamp, JSON.stringify(payload));
+    const makeReq = () => req('POST', '', payload, { 'x-timestamp': String(timestamp), 'x-signature': signature });
+
+    const first = await POST(makeReq());
+    expect(first.status).toBe(200);
+
+    const replay = await POST(makeReq());
+    expect(replay.status).toBe(401);
+    expect(await replay.json()).toMatchObject({ error: 'replayed_signature' });
+    // Only the first request's row was written.
+    expect(h.upserts).toHaveLength(1);
+  });
+
+  it('a signature computed with the WRONG secret is rejected (not just a body mismatch)', async () => {
+    const payload = { transaction_id: 'tx-wrong-secret', network: 'awin', commission_earned: 1 };
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = signPostbackBody('not-the-real-secret', timestamp, JSON.stringify(payload));
+
+    const res = await POST(req('POST', '', payload, { 'x-timestamp': String(timestamp), 'x-signature': signature }));
+
+    expect(res.status).toBe(401);
+    expect(await res.json()).toMatchObject({ error: 'invalid_signature' });
+    expect(h.upserts).toHaveLength(0);
+  });
+
+  it('plain unsigned requests (no X-Signature header) still work via the legacy query-secret fallback', async () => {
+    // Regression guard: adding HMAC support must not have broken the original
+    // secret-only auth path for integrations that never send a signature.
+    const res = await POST(req('POST', `secret=${SECRET}`, { transaction_id: 'tx-legacy', network: 'awin', commission_earned: 1 }));
+    expect(res.status).toBe(200);
+    expect(h.upserts).toHaveLength(1);
   });
 });

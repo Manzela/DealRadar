@@ -59,3 +59,49 @@ export function timingSafeEqualStr(a: string, b: string): boolean {
     return false;
   }
 }
+
+/**
+ * HMAC-SHA256 signature scheme for the postback webhook
+ * (src/app/api/postbacks/route.ts — NFR-SEC-4/6, T-INF-7).
+ *
+ * Signs `${timestampSeconds}.${rawBody}` (rawBody = the exact request bytes,
+ * NOT a re-serialized JSON.stringify — key order / whitespace must round-trip
+ * byte-for-byte or a legitimate signature won't verify) with WEBHOOK_SECRET.
+ * Binding the timestamp INTO the signature means a captured signature cannot
+ * be replayed against a different timestamp — see verifyPostbackSignature and
+ * the route's replay-window check for the rest of the defense.
+ *
+ * This is an OPT-IN scheme: it authenticates via a custom `X-Signature` +
+ * `X-Timestamp` header pair, which not every affiliate network can send (some
+ * only support query-string postbacks). The route keeps the legacy
+ * query-string `secret` check as a fallback for those networks — this
+ * function only covers the header-capable path.
+ */
+export function signPostbackBody(secret: string, timestampSeconds: number, rawBody: string): string {
+  return crypto.createHmac('sha256', secret).update(`${timestampSeconds}.${rawBody}`).digest('hex');
+}
+
+/**
+ * Timing-safe verification of a postback signature. Fails closed on any
+ * malformed input (mirrors verifyUnsubscribeToken's shape).
+ */
+export function verifyPostbackSignature(
+  secret: string,
+  timestampSeconds: number,
+  rawBody: string,
+  signatureHex: string,
+): boolean {
+  if (!signatureHex || typeof signatureHex !== 'string') return false;
+  let expected: string;
+  try {
+    expected = signPostbackBody(secret, timestampSeconds, rawBody);
+  } catch {
+    return false;
+  }
+  if (expected.length !== signatureHex.length) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(signatureHex, 'hex'));
+  } catch {
+    return false;
+  }
+}
