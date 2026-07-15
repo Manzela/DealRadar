@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:migrate": "node scripts/apply-schema.mjs",
-    "drill:thin-loop": "node scripts/thin-loop-drill.mjs"
+    "drill:thin-loop": "node scripts/thin-loop-drill.mjs",
+    "check:budgets": "node scripts/check-budgets.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.0",
