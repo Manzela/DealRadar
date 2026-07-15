@@ -64,21 +64,24 @@ export function timingSafeEqualStr(a: string, b: string): boolean {
  * HMAC-SHA256 signature scheme for the postback webhook
  * (src/app/api/postbacks/route.ts — NFR-SEC-4/6, T-INF-7).
  *
- * Signs `${timestampSeconds}.${rawBody}` (rawBody = the exact request bytes,
- * NOT a re-serialized JSON.stringify — key order / whitespace must round-trip
- * byte-for-byte or a legitimate signature won't verify) with WEBHOOK_SECRET.
- * Binding the timestamp INTO the signature means a captured signature cannot
- * be replayed against a different timestamp — see verifyPostbackSignature and
- * the route's replay-window check for the rest of the defense.
+ * Signs `${timestampSeconds}.${message}` with WEBHOOK_SECRET. `message` is
+ * whatever was actually signed on the sender's side — for POST that's the
+ * exact raw request body bytes (NOT a re-serialized JSON.stringify — key
+ * order / whitespace must round-trip byte-for-byte or a legitimate signature
+ * won't verify); for GET (no body) it's the canonicalized query string, see
+ * canonicalizePostbackQuery in the route. Binding the timestamp INTO the
+ * signature means a captured signature cannot be replayed against a
+ * different timestamp — see verifyPostbackSignature and the route's
+ * replay-window + one-time-claim checks for the rest of the defense.
  *
- * This is an OPT-IN scheme: it authenticates via a custom `X-Signature` +
- * `X-Timestamp` header pair, which not every affiliate network can send (some
- * only support query-string postbacks). The route keeps the legacy
- * query-string `secret` check as a fallback for those networks — this
- * function only covers the header-capable path.
+ * POST requires this signature unconditionally (no fallback). GET accepts it
+ * as the preferred path (via `ts`/`sig` query params) but still falls back to
+ * a bare shared secret for networks that cannot attach anything beyond query
+ * params to a pixel URL — see the route's top-level comment for the full
+ * POST-required / GET-recommended rationale.
  */
-export function signPostbackBody(secret: string, timestampSeconds: number, rawBody: string): string {
-  return crypto.createHmac('sha256', secret).update(`${timestampSeconds}.${rawBody}`).digest('hex');
+export function signPostbackBody(secret: string, timestampSeconds: number, message: string): string {
+  return crypto.createHmac('sha256', secret).update(`${timestampSeconds}.${message}`).digest('hex');
 }
 
 /**
@@ -88,13 +91,13 @@ export function signPostbackBody(secret: string, timestampSeconds: number, rawBo
 export function verifyPostbackSignature(
   secret: string,
   timestampSeconds: number,
-  rawBody: string,
+  message: string,
   signatureHex: string,
 ): boolean {
   if (!signatureHex || typeof signatureHex !== 'string') return false;
   let expected: string;
   try {
-    expected = signPostbackBody(secret, timestampSeconds, rawBody);
+    expected = signPostbackBody(secret, timestampSeconds, message);
   } catch {
     return false;
   }

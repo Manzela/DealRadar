@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { buildSubId, decodeSubId } from '@/lib/utils/affiliate';
 import { signPostbackBody } from '@/lib/utils/crypto';
+import { canonicalizePostbackQuery } from './canonicalize';
 
 // Capture what the route writes to `transactions`, and let a test force one 23503.
 const h = vi.hoisted(() => ({ upserts: [] as any[], failNext23503: false, seenSignatures: new Set<string>() }));
@@ -49,6 +50,36 @@ function req(method: 'POST' | 'GET', qs: string, body?: unknown, extraHeaders?: 
   });
 }
 
+/**
+ * A correctly HMAC-signed POST request — POST now requires this
+ * unconditionally. `timestamp` defaults to "now"; pass an explicit value to
+ * get a distinct signature for the SAME body (e.g. two "duplicate postback"
+ * requests fired in the same test would otherwise share one timestamp and
+ * therefore one signature, which the replay guard would then — correctly —
+ * treat as a replay rather than two independent deliveries).
+ */
+function signedPostReq(body: unknown, timestamp = Math.floor(Date.now() / 1000)) {
+  const bodyStr = JSON.stringify(body);
+  const signature = signPostbackBody(SECRET, timestamp, bodyStr);
+  return req('POST', '', body, { 'x-timestamp': String(timestamp), 'x-signature': signature });
+}
+
+/**
+ * A correctly HMAC-signed GET request (`&ts=…&sig=…`), signed EXACTLY the
+ * way the route verifies it — via the same canonicalizePostbackQuery import
+ * — so there is no separate reimplementation to drift out of sync.
+ */
+function signedGetReq(params: Record<string, string>) {
+  const url = new URL('https://dealradar.me/api/postbacks');
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  const timestamp = Math.floor(Date.now() / 1000);
+  url.searchParams.set('ts', String(timestamp));
+  const message = canonicalizePostbackQuery(url.searchParams);
+  const signature = signPostbackBody(SECRET, timestamp, message);
+  url.searchParams.set('sig', signature);
+  return new NextRequest(url.toString());
+}
+
 beforeEach(() => {
   h.upserts.length = 0;
   h.failNext23503 = false;
@@ -56,12 +87,12 @@ beforeEach(() => {
   process.env.WEBHOOK_SECRET = SECRET;
 });
 
-describe('POST /api/postbacks', () => {
+describe('POST /api/postbacks (HMAC signature required — no query-secret fallback)', () => {
   it('persists a valid AWIN postback and recovers the productId from the sub-id (lossless round-trip)', async () => {
     const pid = 'awin:DE:12345';
     const clickref = buildSubId('DE', 'electronics', pid);
     const res = await POST(
-      req('POST', `secret=${SECRET}`, {
+      signedPostReq({
         transaction_id: 'tx-1',
         network: 'awin',
         commission_earned: 2.5,
@@ -82,28 +113,42 @@ describe('POST /api/postbacks', () => {
 
   it('is idempotent on transaction_id — a duplicate upserts (onConflict), never 500s', async () => {
     const payload = { transaction_id: 'dup', network: 'awin', commission_earned: 1, status: 'pending' };
-    const r1 = await POST(req('POST', `secret=${SECRET}`, payload));
-    const r2 = await POST(req('POST', `secret=${SECRET}`, payload));
+    const now = Math.floor(Date.now() / 1000);
+    // Two DISTINCT signed requests for the SAME payload (different
+    // timestamps → different signatures), so this exercises transaction_id
+    // upsert idempotency specifically, not the signature-replay guard (an
+    // identical signature sent twice is a replay, correctly rejected — that
+    // path is covered separately below).
+    const r1 = await POST(signedPostReq(payload, now));
+    const r2 = await POST(signedPostReq(payload, now + 1));
     expect(r1.status).toBe(200);
     expect(r2.status).toBe(200);
     expect(h.upserts.every((u) => u.transaction_id === 'dup')).toBe(true);
   });
 
   it('rejects a negative/NaN commission with 400', async () => {
-    const res = await POST(
-      req('POST', `secret=${SECRET}`, { transaction_id: 'tx', network: 'awin', commission_earned: -5 }),
-    );
+    const res = await POST(signedPostReq({ transaction_id: 'tx', network: 'awin', commission_earned: -5 }));
     expect(res.status).toBe(400);
     expect(h.upserts).toHaveLength(0);
   });
 
   it('rejects a missing transaction_id with 400', async () => {
-    const res = await POST(req('POST', `secret=${SECRET}`, { network: 'awin', commission_earned: 1 }));
+    const res = await POST(signedPostReq({ network: 'awin', commission_earned: 1 }));
     expect(res.status).toBe(400);
     expect(h.upserts).toHaveLength(0);
   });
 
-  it('rejects a wrong secret with 401 and writes nothing', async () => {
+  it('rejects a POST with a VALID secret but NO X-Signature — the legacy fallback was removed for POST', async () => {
+    // This is the behavior change: before, ?secret=<correct> alone was enough
+    // to authenticate ANY postback body. A leaked secret can no longer do
+    // that for POST — a signature is unconditionally required.
+    const res = await POST(req('POST', `secret=${SECRET}`, { transaction_id: 'tx', network: 'awin', commission_earned: 1 }));
+    expect(res.status).toBe(401);
+    expect(await res.json()).toMatchObject({ error: 'missing_signature' });
+    expect(h.upserts).toHaveLength(0);
+  });
+
+  it('rejects a POST with a wrong secret AND no signature (still 401, for the same reason)', async () => {
     const res = await POST(req('POST', 'secret=wrong', { transaction_id: 'tx', commission_earned: 1 }));
     expect(res.status).toBe(401);
     expect(h.upserts).toHaveLength(0);
@@ -120,7 +165,7 @@ describe('POST /api/postbacks', () => {
     h.failNext23503 = true;
     const clickref = buildSubId('DE', 'electronics', 'awin:DE:gone');
     const res = await POST(
-      req('POST', `secret=${SECRET}`, {
+      signedPostReq({
         transaction_id: 'tx-fk',
         network: 'awin',
         commission_earned: 3,
@@ -136,38 +181,7 @@ describe('POST /api/postbacks', () => {
   });
 });
 
-describe('GET /api/postbacks (query-string postbacks)', () => {
-  it('accepts a GET postback and never persists the secret into raw_payload', async () => {
-    const clickref = buildSubId('DE', 'electronics', 'awin:DE:9');
-    const res = await GET(
-      req(
-        'GET',
-        `secret=${SECRET}&transaction_id=tx-get&network=awin&commission_earned=1.5&status=pending&clickref=${encodeURIComponent(clickref)}`,
-      ),
-    );
-    expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ ok: true, persisted: true });
-    expect(h.upserts[0].product_id).toBe('awin:DE:9');
-    expect(h.upserts[0].raw_payload.secret).toBeUndefined();
-    expect(JSON.stringify(h.upserts[0].raw_payload)).not.toContain(SECRET);
-  });
-});
-
-describe('POST /api/postbacks — HMAC signature (opt-in primary auth path)', () => {
-  it('accepts a validly signed postback with NO query-string secret at all', async () => {
-    const clickref = buildSubId('DE', 'electronics', 'awin:DE:sig-ok');
-    const payload = { transaction_id: 'tx-sig-ok', network: 'awin', commission_earned: 4.2, status: 'approved', clickref };
-    const timestamp = Math.floor(Date.now() / 1000);
-    const signature = signPostbackBody(SECRET, timestamp, JSON.stringify(payload));
-
-    const res = await POST(req('POST', '', payload, { 'x-timestamp': String(timestamp), 'x-signature': signature }));
-
-    expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ ok: true, persisted: true });
-    expect(h.upserts[0].transaction_id).toBe('tx-sig-ok');
-    expect(h.upserts[0].product_id).toBe('awin:DE:sig-ok');
-  });
-
+describe('POST /api/postbacks — HMAC signature details', () => {
   it('rejects a tampered body — valid signature, but for a DIFFERENT body than what was sent', async () => {
     const original = { transaction_id: 'tx-tamper', network: 'awin', commission_earned: 1 };
     const tampered = { ...original, commission_earned: 999 };
@@ -232,12 +246,62 @@ describe('POST /api/postbacks — HMAC signature (opt-in primary auth path)', ()
     expect(await res.json()).toMatchObject({ error: 'invalid_signature' });
     expect(h.upserts).toHaveLength(0);
   });
+});
 
-  it('plain unsigned requests (no X-Signature header) still work via the legacy query-secret fallback', async () => {
-    // Regression guard: adding HMAC support must not have broken the original
-    // secret-only auth path for integrations that never send a signature.
-    const res = await POST(req('POST', `secret=${SECRET}`, { transaction_id: 'tx-legacy', network: 'awin', commission_earned: 1 }));
+describe('GET /api/postbacks (query-string postbacks)', () => {
+  it('accepts a GET postback via the bare ?secret= fallback (documented residual path, GET-only)', async () => {
+    const clickref = buildSubId('DE', 'electronics', 'awin:DE:9');
+    const res = await GET(
+      req(
+        'GET',
+        `secret=${SECRET}&transaction_id=tx-get&network=awin&commission_earned=1.5&status=pending&clickref=${encodeURIComponent(clickref)}`,
+      ),
+    );
     expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, persisted: true });
+    expect(h.upserts[0].product_id).toBe('awin:DE:9');
+    expect(h.upserts[0].raw_payload.secret).toBeUndefined();
+    expect(JSON.stringify(h.upserts[0].raw_payload)).not.toContain(SECRET);
+  });
+
+  it('accepts a GET postback with a valid ts+sig query-param signature (no ?secret= needed)', async () => {
+    const clickref = buildSubId('DE', 'electronics', 'awin:DE:get-sig-ok');
+    const request = signedGetReq({
+      transaction_id: 'tx-get-sig-ok',
+      network: 'awin',
+      commission_earned: '2',
+      status: 'approved',
+      clickref,
+    });
+    const res = await GET(request);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, persisted: true });
+    expect(h.upserts[0].product_id).toBe('awin:DE:get-sig-ok');
+    // ts/sig must not leak into raw_payload either, same as secret.
+    expect(h.upserts[0].raw_payload.sig).toBeUndefined();
+    expect(h.upserts[0].raw_payload.ts).toBeUndefined();
+  });
+
+  it('rejects a GET postback with a tampered sig (a query param changed after signing)', async () => {
+    const signed = signedGetReq({ transaction_id: 'tx-get-tamper', network: 'awin', commission_earned: '2' });
+    const tamperedUrl = new URL(signed.url);
+    tamperedUrl.searchParams.set('commission_earned', '999'); // changed AFTER signing
+    const res = await GET(new NextRequest(tamperedUrl.toString()));
+    expect(res.status).toBe(401);
+    expect(await res.json()).toMatchObject({ error: 'invalid_signature' });
+    expect(h.upserts).toHaveLength(0);
+  });
+
+  it('rejects a replayed GET sig (the identical signed URL requested twice)', async () => {
+    const request = signedGetReq({ transaction_id: 'tx-get-replay', network: 'awin', commission_earned: '1' });
+    const urlStr = request.url;
+
+    const first = await GET(request);
+    expect(first.status).toBe(200);
+
+    const replay = await GET(new NextRequest(urlStr));
+    expect(replay.status).toBe(401);
+    expect(await replay.json()).toMatchObject({ error: 'replayed_signature' });
     expect(h.upserts).toHaveLength(1);
   });
 });
