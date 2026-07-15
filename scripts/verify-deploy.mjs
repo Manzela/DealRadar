@@ -105,6 +105,13 @@ if (sampleDealPath) {
   // The escape fix: a raw </script> must never appear inside any ld+json block.
   const noBreakout = ldBlocks.length > 0 && ldBlocks.every((b) => !/<\/script/i.test(b));
   check('PDP JSON-LD has no raw </script> breakout', noBreakout, noBreakout ? 'escaped' : 'raw </script> present');
+  // Merchant-Center string limits (mirrored by the GSC/Rich-Results validators):
+  // name 1–150, description 1–5,000 — exceeding either draws "Invalid string
+  // length" warnings (audit/2026-07-15_jsonld-schema).
+  const nameLen = product?.name?.length ?? -1;
+  check('PDP Product name ≤150 chars', nameLen > 0 && nameLen <= 150, `len=${nameLen}`);
+  const descLen = product?.description?.length ?? -1;
+  check('PDP Product description ≤5000 chars', descLen > 0 && descLen <= 5000, `len=${descLen}`);
 } else {
   check('deal PDP reachable (needs a sitemap deal URL)', false, 'no sample deal slug from sitemap');
 }

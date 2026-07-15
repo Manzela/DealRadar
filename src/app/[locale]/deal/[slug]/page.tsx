@@ -17,6 +17,7 @@ import { productGallery } from '@/lib/utils/product-details';
 import { Badge } from '@/components/ui/badge';
 import { routing } from '@/i18n/routing';
 import { siteUrl } from '@/lib/utils/site-url';
+import { clampSchemaText, SCHEMA_NAME_MAX, SCHEMA_DESCRIPTION_MAX } from '@/lib/seo/schema-text';
 import { gaItem, gaItemAttr } from '@/lib/analytics/items';
 import { TrackViewItem } from '@/components/analytics/TrackView';
 import { matchSubCategory } from '@/lib/categories';
@@ -81,12 +82,13 @@ export default async function DealDetailPage({ params }: Props) {
   const jsonLd = {
     '@context': 'https://schema.org/',
     '@type': 'Product',
-    name: deal.productName,
+    // Capped copies for the validators (MC limits 150/5000); h1/title keep full text.
+    name: clampSchemaText(deal.productName, SCHEMA_NAME_MAX),
     // Full-res gallery (un-proxied), not the 200×200 productserve thumbnail.
     image: gallery,
     // [FR-SEO-2 / FR-PDP-7] The real feed description when present — the
     // synthetic name+shop string is only the empty-description fallback.
-    description: deal.description || `${deal.productName} — ${deal.shopName}`,
+    description: clampSchemaText(deal.description || `${deal.productName} — ${deal.shopName}`, SCHEMA_DESCRIPTION_MAX),
     ...(deal.brand ? { brand: { '@type': 'Brand', name: deal.brand } } : {}),
     ...(deal.eanCode ? { gtin: deal.eanCode } : {}),
     ...(deal.mpn || deal.modelNumber ? { mpn: deal.mpn || deal.modelNumber } : {}),
