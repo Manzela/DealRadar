@@ -11,8 +11,9 @@ const config: Config = {
     extend: {
       colors: {
         accent: {
-          DEFAULT: '#EA580C', // orange-600
-          hover: '#C2410C',   // orange-700
+          DEFAULT: '#EA580C', // orange-600 — icons/borders only: 3.4:1 on white fails AA for normal text
+          hover: '#C2410C',   // orange-700 — AA-safe as text on white (5.0:1) and as white-text bg
+          deep: '#9A3412',    // orange-800 — hover state for accent-hover CTAs
           soft: '#FFF1E7',    // warm peach tint
         },
         deal: {

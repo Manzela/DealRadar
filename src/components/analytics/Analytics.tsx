@@ -70,45 +70,27 @@ function loadClarity(): void {
   w.clarity('consent');
 }
 
-/** Inject gtag.js (idempotent) with the Consent Mode v2 sequence. */
+/** Enable gtag.js (loaded statically) and update Consent Mode v2 state. */
 function loadGa(): void {
   if (window.__gaLoaded) {
     gaConsentUpdate(true); // re-granted after a revoke
     return;
   }
   window.__gaLoaded = true;
-  window.dataLayer = window.dataLayer || [];
-  // gtag MUST push the arguments object itself (not a rest-args array) — the
-  // GA snippet contract; gtag.js inspects the Arguments instance.
-  window.gtag = function gtag() {
-    // eslint-disable-next-line prefer-rest-params
-    window.dataLayer!.push(arguments);
-  } as unknown as (...args: unknown[]) => void;
-  // Consent Mode v2: default DENIED for every key, queued BEFORE any command
-  // that could read/write storage (per the consent-mode docs).
-  window.gtag('consent', 'default', {
-    ad_storage: 'denied',
-    ad_user_data: 'denied',
-    ad_personalization: 'denied',
-    analytics_storage: 'denied',
-    wait_for_update: 500,
-  });
-  window.gtag('js', new Date());
-  // Belt-and-braces for the "no Google-advertising features" policy promise:
-  // signals off explicitly, on top of the permanently-denied ads consent keys.
-  window.gtag('config', GA_ID, {
-    allow_google_signals: false,
-    allow_ad_personalization_signals: false,
-  });
+  if (!window.gtag) {
+    window.dataLayer = window.dataLayer || [];
+    // gtag MUST push the arguments object itself (not a rest-args array) — the
+    // GA snippet contract; gtag.js inspects the Arguments instance.
+    window.gtag = function gtag() {
+      // eslint-disable-next-line prefer-rest-params
+      window.dataLayer!.push(arguments);
+    } as unknown as (...args: unknown[]) => void;
+  }
   // This branch only runs post-grant — release analytics storage immediately,
   // then drain impressions buffered before the tag existed (landing-page
   // TrackView effects run before this component's effect).
   gaConsentUpdate(true);
   gaFlushPending();
-  const s = document.createElement('script');
-  s.async = true;
-  s.src = `https://www.googletagmanager.com/gtag/js?id=${GA_ID}`;
-  document.head.appendChild(s);
 }
 
 export function Analytics() {

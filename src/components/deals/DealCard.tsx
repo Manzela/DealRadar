@@ -71,7 +71,7 @@ export function DealCard({ deal, priority = false, listName }: { deal: Normalize
           <span className="text-lg font-semibold text-zinc-900">
             {formatPrice(deal.salePrice, deal.currency, locale)}
           </span>
-          <s className="text-sm text-zinc-400">
+          <s className="text-sm text-zinc-500">
             {formatPrice(deal.originalPrice, deal.currency, locale)}
           </s>
         </div>
@@ -104,7 +104,7 @@ export function DealCard({ deal, priority = false, listName }: { deal: Normalize
             ),
           })}
         </a>
-        <p className="mt-1 whitespace-nowrap text-center text-[8.5px] tracking-[-0.02em] leading-tight text-zinc-400">{t('priceNote')}</p>
+        <p className="mt-1 whitespace-nowrap text-center text-[8.5px] tracking-[-0.02em] leading-tight text-zinc-500">{t('priceNote')}</p>
 
         <PriceAlertButton
           productId={deal.productId}

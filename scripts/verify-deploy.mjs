@@ -112,6 +112,11 @@ if (sampleDealPath) {
   check('PDP Product name ≤150 chars', nameLen > 0 && nameLen <= 150, `len=${nameLen}`);
   const descLen = product?.description?.length ?? -1;
   check('PDP Product description ≤5000 chars', descLen > 0 && descLen <= 5000, `len=${descLen}`);
+  // Structured data must not reference noindexed pages: the visible third
+  // crumb links /search (noindex by design), so JSON-LD stops at two crumbs.
+  const breadcrumb = parsedBlocks.find((p) => p?.['@type'] === 'BreadcrumbList');
+  const noSearchCrumb = !!breadcrumb && (breadcrumb.itemListElement || []).every((li) => !/\/search\?/.test(li?.item || ''));
+  check('PDP BreadcrumbList has no /search? item', noSearchCrumb, breadcrumb ? 'crumb points at noindexed /search' : 'no BreadcrumbList node');
 } else {
   check('deal PDP reachable (needs a sitemap deal URL)', false, 'no sample deal slug from sitemap');
 }

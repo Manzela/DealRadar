@@ -16,6 +16,20 @@ export const SCHEMA_DESCRIPTION_MAX = 5000;
  * 40% of the budget (same semantics as the ingest's feedDescription cap).
  * Returns the input unchanged when it already fits.
  */
+/**
+ * Conservative trailing-model-code extraction for feeds that embed the model
+ * in the product name (e.g. BlazeVideo: "… Wasserdicht IP66 | A323"). Used as
+ * the JSON-LD `model` property ONLY when the feed ships no mpn/model_number.
+ * Strict by design — a `| CODE` suffix where CODE is a single uppercase
+ * alphanumeric token (with hyphens) containing at least one letter; anything
+ * else (sentences, lowercase, plain numbers) returns null. Never emitted as
+ * gtin/mpn: a heuristic must not masquerade as a manufacturer identifier.
+ */
+export function extractTrailingModelCode(name: string): string | null {
+  const m = name.match(/\|\s*(?=[A-Z0-9-]*[A-Z])([A-Z0-9][A-Z0-9-]{1,14})\s*$/);
+  return m ? m[1] : null;
+}
+
 export function clampSchemaText(s: string, max: number): string {
   if (s.length <= max) return s;
   let head = s.slice(0, max - 1);

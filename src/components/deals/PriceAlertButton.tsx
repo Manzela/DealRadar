@@ -77,7 +77,7 @@ export function PriceAlertButton({
           clarityEvent('price_alert_open');
           gaEvent('price_alert_open', { item_id: productId });
         }}
-        className="mt-2 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-accent/40 text-xs font-medium text-accent transition-colors hover:border-accent hover:bg-accent-soft"
+        className="mt-2 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-accent/40 text-xs font-medium text-accent-hover transition-colors hover:border-accent hover:bg-accent-soft"
       >
         <BellRing className="h-3.5 w-3.5 origin-top group-hover:animate-bell-alert" aria-hidden />
         {t('button')}

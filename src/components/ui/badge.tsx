@@ -7,9 +7,9 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-accent-soft text-accent',
+        default: 'bg-accent-soft text-accent-hover',
         deal: 'bg-deal text-white',
-        sponsored: 'bg-zinc-100 text-zinc-500 font-normal',
+        sponsored: 'bg-zinc-100 text-zinc-600 font-normal',
       },
     },
     defaultVariants: { variant: 'default' },

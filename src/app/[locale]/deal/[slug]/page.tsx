@@ -17,7 +17,7 @@ import { productGallery } from '@/lib/utils/product-details';
 import { Badge } from '@/components/ui/badge';
 import { routing } from '@/i18n/routing';
 import { siteUrl } from '@/lib/utils/site-url';
-import { clampSchemaText, SCHEMA_NAME_MAX, SCHEMA_DESCRIPTION_MAX } from '@/lib/seo/schema-text';
+import { clampSchemaText, extractTrailingModelCode, SCHEMA_NAME_MAX, SCHEMA_DESCRIPTION_MAX } from '@/lib/seo/schema-text';
 import { gaItem, gaItemAttr } from '@/lib/analytics/items';
 import { TrackViewItem } from '@/components/analytics/TrackView';
 import { matchSubCategory } from '@/lib/categories';
@@ -79,6 +79,7 @@ export default async function DealDetailPage({ params }: Props) {
   // the deal record. A single-seller deal is a plain Offer, not an AggregateOffer
   // (which models multiple sellers and triggers Search Console warnings at offerCount:1).
   const gallery = productGallery(deal);
+  const modelCode = deal.mpn || deal.modelNumber ? null : extractTrailingModelCode(deal.productName);
   const jsonLd = {
     '@context': 'https://schema.org/',
     '@type': 'Product',
@@ -94,6 +95,10 @@ export default async function DealDetailPage({ params }: Props) {
     ...(deal.mpn || deal.modelNumber ? { mpn: deal.mpn || deal.modelNumber } : {}),
     // Google: sku is the merchant-specific ID and must not contain whitespace.
     ...(deal.merchantSku ? { sku: deal.merchantSku.replace(/\s+/g, '') } : {}),
+    ...(modelCode ? { model: modelCode } : {}),
+    // priceSpecification/valueAddedTaxIncluded removed 2026-07-15: dropped from
+    // Google's product docs entirely (audit pass 2); EU consumer prices are
+    // VAT-inclusive by law, so the visible price already carries that meaning.
     offers: {
       '@type': 'Offer',
       price: deal.salePrice.toFixed(2),
@@ -102,12 +107,6 @@ export default async function DealDetailPage({ params }: Props) {
       itemCondition: 'https://schema.org/NewCondition',
       url: dealUrl,
       seller: { '@type': 'Organization', name: deal.shopName },
-      priceSpecification: {
-        '@type': 'PriceSpecification',
-        price: deal.salePrice.toFixed(2),
-        priceCurrency: deal.currency,
-        valueAddedTaxIncluded: true,
-      },
     },
   };
 
@@ -137,13 +136,15 @@ export default async function DealDetailPage({ params }: Props) {
         href: `/${params.locale}/search?category=${deal.category}&q=${encodeURIComponent(sub.leaf)}`,
       }
     : null;
+  // JSON-LD carries only the first two crumbs: the third points at /search
+  // (noindex by design), and structured data shouldn't reference pages Google
+  // won't index. The visible nav keeps all three.
   const breadcrumbJsonLd = {
     '@context': 'https://schema.org/',
     '@type': 'BreadcrumbList',
     itemListElement: [
       { '@type': 'ListItem', position: 1, name: t('breadcrumbHome'), item: `${BASE_URL}/${params.locale}` },
       { '@type': 'ListItem', position: 2, name: categoryLabel, item: `${BASE_URL}/${params.locale}/category/${deal.category}` },
-      ...(subCrumb ? [{ '@type': 'ListItem', position: 3, name: subCrumb.label, item: `${BASE_URL}${subCrumb.href}` }] : []),
     ],
   };
 
@@ -197,14 +198,14 @@ export default async function DealDetailPage({ params }: Props) {
 
         <div className="flex flex-col justify-between">
           <div>
-            <div className="mb-2 text-sm font-semibold uppercase tracking-wider text-accent">{deal.shopName}</div>
+            <div className="mb-2 text-sm font-semibold uppercase tracking-wider text-accent-hover">{deal.shopName}</div>
             <h1 className="mb-4 text-2xl font-bold text-zinc-900 md:text-3xl">{deal.productName}</h1>
 
             <div className="mb-4 flex items-baseline gap-3">
               <span className="text-3xl font-extrabold text-zinc-900">
                 {formatPrice(deal.salePrice, deal.currency, params.locale)}
               </span>
-              <span className="text-lg text-zinc-400 line-through">
+              <span className="text-lg text-zinc-500 line-through">
                 {formatPrice(deal.originalPrice, deal.currency, params.locale)}
               </span>
             </div>
@@ -240,7 +241,7 @@ export default async function DealDetailPage({ params }: Props) {
               data-analytics-source="pdp"
               data-analytics-list="pdp"
               data-analytics-item={gaItemAttr(deal)}
-              className="flex h-12 w-full items-center justify-center rounded-lg bg-accent font-semibold text-white transition hover:opacity-90"
+              className="flex h-12 w-full items-center justify-center rounded-lg bg-accent-hover font-semibold text-white transition hover:bg-accent-deep"
             >
               {t('goToShop', { shop: deal.shopName })}
             </a>
