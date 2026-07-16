@@ -26,6 +26,7 @@ const path = require('path');
 const https = require('https');
 const zlib = require('zlib');
 const { feedDescription } = require('./lib/description.cjs');
+const { normalizeEnhancedRow } = require('./lib/enhanced-feed.cjs');
 
 // ── args & env ───────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -37,6 +38,16 @@ const LIMIT = parseInt(opt('--limit', '0'), 10) || 0; // 0 = no cap
 const COUNTRY = opt('--country', 'DE').toUpperCase();
 const ALLOWED_CURRENCIES = new Set((opt('--currency', 'EUR')).toUpperCase().split(','));
 const BATCH = 500;
+// Ingest-v2 (audit/2026-07-16): additionally pull every ACTIVE Google-format
+// feed via the feed-list endpoint. Google feeds are invisible to the
+// category-based AWIN_FEED_URL and carry no sale_price — their rows land
+// HIDDEN (discount 0) and the daily live-shop verifier promotes the genuinely
+// discounted ones (it already reads Shopify compare-at prices and un-hides).
+const ENHANCED = !has('--no-enhanced');
+const PUBLISHER_ID = (process.env.AWIN_PUBLISHER_ID || '2951525').trim();
+// Feed-list Language values are full names; only same-language feeds join the
+// market's catalog (EN/NL feeds are a deliberate non-goal for now).
+const ENHANCED_LANGUAGE = opt('--enhanced-language', 'German');
 
 loadEnvLocal();
 const FEED_URL = process.env.AWIN_FEED_URL;
@@ -170,6 +181,7 @@ function normalizeRow(g) {
     mpn: g('mpn').trim() || null,
     model_number: g('model_number').trim() || g('product_model').trim() || null,
     merchant_sku: g('merchant_product_id').trim() || null,
+    merchant_id: g('merchant_id').trim() || null,
     country: COUNTRY,
     city: null,
     is_sponsored: true,
@@ -240,6 +252,101 @@ function ingest(url, onHeader, onRow, redirects = 0, stats = { bytes: 0 }) {
       res.pipe(gunzip);
     }).on('error', reject);
   });
+}
+
+// ── enhanced (Google-format) feeds: feed-list-driven acquisition ───────────────
+// The feed-list endpoint (same api key as AWIN_FEED_URL) enumerates every feed
+// with a format flag and a per-feed .csv.gz URL — the ONLY route that reaches
+// Google-format advertisers without freezing an advertiser list (they are not
+// selectable in category-based Create-a-Feed). Schema verified empirically
+// 2026-07-16: 62 columns, BOM+UTF-8, identical across all active feeds.
+
+/** Plain-text GET with redirects (the feed list itself is uncompressed CSV). */
+function fetchText(url, redirects = 0) {
+  return new Promise((resolve, reject) => {
+    if (redirects > 5) return reject(new Error('too many redirects'));
+    https.get(url, (res) => {
+      const code = res.statusCode || 0;
+      if (code >= 300 && code < 400 && res.headers.location) {
+        res.resume();
+        return resolve(fetchText(new URL(res.headers.location, url).toString(), redirects + 1));
+      }
+      if (code !== 200) { res.resume(); return reject(new Error(`HTTP ${code} downloading ${url.split('/').pop()}`)); }
+      let out = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => { out += c; });
+      res.on('end', () => resolve(out));
+      res.on('error', reject);
+    }).on('error', reject);
+  });
+}
+
+/** CSV string → array of header-keyed objects (reuses the streaming parser). */
+function parseCsvString(text) {
+  let header = null;
+  const rows = [];
+  const parser = makeCsvParser(
+    (h) => { header = h.map((n) => n.replace(/^\uFEFF/, '')); },
+    (cols) => { if (header) rows.push(Object.fromEntries(header.map((n, i) => [n, cols[i] ?? '']))); },
+  );
+  parser.push(text);
+  parser.end();
+  return rows;
+}
+
+/**
+ * Download + normalize every ACTIVE Google-format feed in the market language.
+ * Returns null (with a log line) when the feed list is unreachable or the api
+ * key can't be derived — the legacy ingest must never fail because of this.
+ */
+async function runEnhancedFeeds(counters) {
+  const key = (FEED_URL.match(/\/apikey\/([0-9a-f]+)/i) || [])[1];
+  if (!key) { console.log('[awin] enhanced: cannot derive feed api key from AWIN_FEED_URL — skipped'); return null; }
+  const listUrl = `https://ui.awin.com/productdata-darwin-download/publisher/${PUBLISHER_ID}/${key}/1/feedList`;
+  const feeds = parseCsvString(await fetchText(listUrl));
+  const selected = feeds.filter((f) =>
+    f['Membership Status'] === 'active' && f['Datafeed Format'] === 'Google' &&
+    f['Language'] === ENHANCED_LANGUAGE && f['URL']);
+  // Advertisers with an ACTIVE Google feed in ANY language: their legacy rows
+  // are skipped (dual-format advertisers like ROCKBROS keep the fresher Google
+  // feed; their legacy feed was 2 months stale when this shipped).
+  const advertiserIds = new Set(feeds
+    .filter((f) => f['Membership Status'] === 'active' && f['Datafeed Format'] === 'Google')
+    .map((f) => f['Advertiser ID']));
+
+  const rows = [];
+  const unmapped = new Map();
+  const perFeed = [];
+  const ctx = {
+    country: COUNTRY,
+    allowedCurrencies: ALLOWED_CURRENCIES,
+    feedDescription,
+    fallbackCategory: (title) => nameOverrideCategory(title) ?? 'electronics',
+    onUnmappedCategory: (p) => unmapped.set(p, (unmapped.get(p) || 0) + 1),
+  };
+  for (const f of selected) {
+    let idx2 = null;
+    let scanned2 = 0, kept2 = 0;
+    try {
+      await ingest(f.URL,
+        (header) => { idx2 = Object.fromEntries(header.map((name, i) => [name.replace(/^\uFEFF/, ''), i])); },
+        (cols) => {
+          scanned2++;
+          const g = (k) => (idx2[k] !== undefined ? (cols[idx2[k]] ?? '') : '');
+          const row = normalizeEnhancedRow(g, ctx);
+          if (!row) return;
+          kept2++;
+          rows.push(row);
+          counters.byCategory.set(row.category, (counters.byCategory.get(row.category) || 0) + 1);
+          counters.byMerchant.set(row.shop_name, (counters.byMerchant.get(row.shop_name) || 0) + 1);
+        });
+      perFeed.push({ feed: f['Feed ID'], advertiser: f['Advertiser Name'], scanned: scanned2, kept: kept2 });
+    } catch (e) {
+      // Per-feed isolation: one advertiser's broken feed must not sink the rest.
+      perFeed.push({ feed: f['Feed ID'], advertiser: f['Advertiser Name'], scanned: scanned2, kept: kept2, error: e.message });
+    }
+  }
+  return { rows, advertiserIds, unmapped, perFeed };
 }
 
 /**
@@ -330,7 +437,7 @@ async function fetchExistingPrices() {
 
   let capped = false;
   const feedBytes = await ingest(FEED_URL,
-    (header) => { idx = Object.fromEntries(header.map((name, i) => [name, i])); },
+    (header) => { idx = Object.fromEntries(header.map((name, i) => [name.replace(/^\uFEFF/, ''), i])); },
     (cols) => {
       if (capped) return;
       scanned++;
@@ -351,9 +458,40 @@ async function fetchExistingPrices() {
     },
   );
 
+  let legacyRows = batch; batch = [];
+
+  // ── ingest-v2: enhanced (Google-format) feeds — see audit/2026-07-16 ────────
+  // Skipped on --limit smoke runs; a failure here never sinks the legacy pass.
+  let enhanced = null;
+  if (ENHANCED && !LIMIT) {
+    try { enhanced = await runEnhancedFeeds({ byCategory, byMerchant }); }
+    catch (e) { console.warn('[awin] enhanced pass FAILED (legacy ingest unaffected):', e.message); }
+  }
+  let excludedLegacy = 0;
+  if (enhanced) {
+    if (enhanced.advertiserIds.size) {
+      // Dual-format advertisers: the Google feed is the fresher source — their
+      // legacy rows are dropped so the two id namespaces never both publish.
+      const before = legacyRows.length;
+      legacyRows = legacyRows.filter((r) => !enhanced.advertiserIds.has(String(r.merchant_id || '')));
+      excludedLegacy = before - legacyRows.length;
+      kept -= excludedLegacy;
+    }
+    kept += enhanced.rows.length;
+    for (const f of enhanced.perFeed) {
+      console.log(`[awin] enhanced ${f.advertiser} (${f.feed}): scanned ${f.scanned}, kept ${f.kept}${f.error ? ` — ERROR: ${f.error}` : ''}`);
+    }
+    if (excludedLegacy) console.log(`[awin] enhanced: skipped ${excludedLegacy} legacy rows from dual-format advertisers`);
+    if (enhanced.unmapped.size) {
+      console.log('[awin] enhanced: UNMAPPED google categories (fell back):',
+        [...enhanced.unmapped.entries()].map(([p, n]) => `${p} ×${n}`).join(' | '));
+    }
+  }
+  const enhancedRows = enhanced ? enhanced.rows : [];
+
   // Upsert in batches AFTER parsing (the parser callback is synchronous).
   if (DO_UPSERT) {
-    const all = batch; batch = [];
+    const all = [...legacyRows, ...enhancedRows];
     // Preserve verified prices for products we already have; the feed price is
     // only used for brand-new products (until the verifier first checks them).
     const existing = await fetchExistingPrices();
@@ -371,12 +509,32 @@ async function fetchExistingPrices() {
         galleriesKept++;
       }
     }
-    for (let i = 0; i < all.length; i += BATCH) {
-      batch = all.slice(i, i + BATCH);
-      await flush();
-      process.stdout.write(`\r[awin] upserted ${upserted}/${all.length}…`);
+    // Hidden-split (ingest-v2): brand-new enhanced rows with no provable
+    // discount land HIDDEN — populated, price-tracked, verifier-visited, but
+    // not published until the live-shop verifier finds a genuine compare-at
+    // discount (it un-hides + sets prices itself). Existing rows never get a
+    // `hidden` key here, so promotion/demotion stays verifier-owned.
+    // Separate flushes: PostgREST needs uniform keys per request.
+    const enhancedIds = new Set(enhancedRows.map((r) => r.product_id));
+    const updates = [];
+    const hiddenNew = [];
+    for (const d of all) {
+      if (enhancedIds.has(d.product_id) && !existing.has(d.product_id) && d.discount_percent <= 0) {
+        hiddenNew.push({ ...d, hidden: true });
+      } else {
+        updates.push(d);
+      }
+    }
+    const total = updates.length + hiddenNew.length;
+    for (const group of [updates, hiddenNew]) {
+      for (let i = 0; i < group.length; i += BATCH) {
+        batch = group.slice(i, i + BATCH);
+        await flush();
+        process.stdout.write(`\r[awin] upserted ${upserted}/${total}…`);
+      }
     }
     process.stdout.write('\n');
+    if (hiddenNew.length) console.log(`[awin] enhanced: ${hiddenNew.length} new products inserted HIDDEN (await verifier-proven discounts)`);
     console.log(`[awin] preserved verified prices for ${preserved} existing deals; feed price used for ${all.length - preserved} new ones`);
     console.log(`[awin] kept ${galleriesKept} enriched galleries (richer than the feed's)`);
 
