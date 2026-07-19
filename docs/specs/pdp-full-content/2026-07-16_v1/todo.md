@@ -45,7 +45,7 @@ Plan: `plan.md` v1.1 · Spec: `spec.md` v1.2 · Status legend: `[ ]` open · `[x
 
 ## Stage 6 — gated expansions
 - [x] T6.1 Renogy-class page extractor (generic Shopify metafield sections; boilerplate excluded by section anchor; rating capture rides the parse) (+ page-level rating capture). Verify: EC-3.
-- [ ] T6.2 P1-7 price-drop promotion (baseline ≥N days of hidden snapshots; liveness write; sets first_published_at). Verify: EC-24 unaffected.
+- [x] T6.2 P1-7 price-drop promotion (scripts/promote-price-drops.cjs: max-of-window baseline, ≥7 distinct days, ≥10% drop, 500/run cap, liveness write; wired after snapshot in verify-awin.yml; 5 guardrail tests) (baseline ≥N days of hidden snapshots; liveness write; sets first_published_at). Verify: EC-24 unaffected.
 
 ## Final
 - [ ] TF.1 Full acceptance harness run on upstream — EC-1..EC-24 all executed, EC-20 green.

@@ -86,6 +86,16 @@ jobs:
             node scripts/snapshot-prices.cjs --apply
           fi
 
+      # Price-drop promotion [Q-2/P1-7]: hidden rows with no compare-at proof
+      # can still publish when their own tracked price drops ≥10% below a
+      # ≥7-day baseline. Optional route — never gates indexation (EC-24).
+      - name: Promote proven price drops
+        if: ${{ !cancelled() && github.event.inputs.dry_run != 'true' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/promote-price-drops.cjs --apply
+
       # Ping IndexNow with visible deals the verifier changed (live price
       # corrections, promotions). Hidden PDPs serve 200+noindex (Q-1) and are
       # excluded by the submit script (interim FR-3.6). The script retries
