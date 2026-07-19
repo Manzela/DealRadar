@@ -406,6 +406,13 @@ alter table public.deals add column if not exists last_verify_outcome text;     
 create index if not exists deals_last_verified_idx
   on public.deals (last_verified asc nulls first, product_id asc);
 
+-- Partial index shaped exactly like the verifier's sweep read [FR-3.2]: the
+-- 33k-row seq-scan+sort exceeded the statement timeout (run 29686705995);
+-- with the predicate matching fetchDeals' filter this is a 23ms range scan.
+create index if not exists deals_sweep_order_idx
+  on public.deals (last_verified asc nulls first, product_id asc)
+  where source = 'awin' and merchant_url like '%/products/%';
+
 -- first_published_at: set once, on the first insert/update that makes the row
 -- visible. Never cleared, never re-set (freeze-after-first-publish).
 create or replace function public.deals_set_first_published()
