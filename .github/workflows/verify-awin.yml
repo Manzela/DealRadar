@@ -50,6 +50,22 @@ jobs:
             node scripts/verify-awin.cjs --apply
           fi
 
+      # Platform-agnostic liveness safety net for NON-Shopify merchants (Lyra
+      # Pet, Aliva Apotheke, …) that the Shopify verifier above silently skips.
+      # Hides deals whose product page is a hard 404/410 (gone) — the only check
+      # that works without platform-specific parsing. Conservative: never hides
+      # on a block or transient error.
+      - name: Liveness-check non-Shopify sellers
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            node scripts/verify-liveness.cjs
+          else
+            node scripts/verify-liveness.cjs --apply
+          fi
+
       # Top up sparse galleries from the live shop (feeds like BlazeVideo ship
       # a single image; the deal page should show the same multi-image gallery
       # for every product). Only touches deals with fewer than 2 real images.
