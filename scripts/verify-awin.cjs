@@ -304,6 +304,13 @@ async function fetchDeals() {
       r = await fetch(`${BASE}/rest/v1/deals?${filter}&select=${colSets[setIdx]}${order}`,
         { headers: { ...SUPA, Range: `${from}-${from + 999}` } });
     }
+    // Transient (non-400) read failure: bounded retry before failing loudly —
+    // a single 5xx/timeout blip must not kill a 100-minute sweep [FR-3.4].
+    for (let attempt = 0; !r.ok && r.status !== 400 && attempt < 2; attempt++) {
+      await sleep(3000 * (attempt + 1));
+      r = await fetch(`${BASE}/rest/v1/deals?${filter}&select=${colSets[setIdx]}${order}`,
+        { headers: { ...SUPA, Range: `${from}-${from + 999}` } });
+    }
     if (!r.ok) throw new Error(`read deals failed: HTTP ${r.status} ${await r.text()}`);
     const batch = await r.json();
     out.push(...batch);
