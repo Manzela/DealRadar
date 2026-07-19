@@ -79,7 +79,7 @@ const ECS = [
     id: 'EC-1', title: 'TH-1 image presence + capture provenance',
     run: async () => {
       const rows = await visibleDeals();
-      if (rows.length < CATALOG_FLOOR) return { status: 'FAIL', detail: `catalog floor: only ${rows.length} visible rows` };
+      if (rows.length < CATALOG_FLOOR) return { status: 'FAIL', detail: `catalog floor: only ${rows.length} visible rows (empty read may mean RLS/anon key)` };
       const noImage = rows.filter((r) => !(r.gallery && r.gallery.length) && !(r.image_url && r.image_url.trim()));
       if (noImage.length > 0) return { status: 'FAIL', detail: `${noImage.length} visible deals with NO image, e.g. ${noImage.slice(0, 3).map((r) => r.product_id).join(', ')}` };
       // Mechanism half (capture_run_id provenance + enrich backfill ≈ 0) lands with Stage 2.
@@ -90,7 +90,7 @@ const ECS = [
     id: 'EC-2', title: 'TH-2 title + TH-3 description presence; hidden-capture decoupling',
     run: async () => {
       const rows = await visibleDeals();
-      if (rows.length < CATALOG_FLOOR) return { status: 'FAIL', detail: `catalog floor: only ${rows.length} visible rows` };
+      if (rows.length < CATALOG_FLOOR) return { status: 'FAIL', detail: `catalog floor: only ${rows.length} visible rows (empty read may mean RLS/anon key)` };
       const noTitle = rows.filter((r) => !(r.product_name && r.product_name.trim()));
       const noDesc = rows.filter((r) => !(r.description && r.description.trim()) && !(r.description_html && r.description_html.trim()));
       if (noTitle.length) return { status: 'FAIL', detail: `${noTitle.length} visible deals with empty title` };
@@ -98,8 +98,46 @@ const ECS = [
       return { status: 'PASS', detail: `titles ${rows.length}/${rows.length}, descriptions ${rows.length}/${rows.length} (decoupling clause pending Stage 2)` };
     },
   },
-  { id: 'EC-3', title: 'Renogy section extractor mechanism', run: RED('Stage 6 (T6.1)') },
-  { id: 'EC-4', title: 'snapshot covers all rows daily', run: RED('Stage 2 (T2.3)') },
+  {
+    id: 'EC-3', title: 'Renogy section extractor mechanism',
+    run: async () => {
+      if (!existsSync(path.join(ROOT, 'scripts/lib/extractors/page-content.cjs'))) return { status: 'FAIL', detail: 'page-content extractor missing' };
+      const vsrc = readFileSync(path.join(ROOT, 'scripts/verify-awin.cjs'), 'utf8');
+      if (!/extractPageContent/.test(vsrc) || !/page-content captures:/.test(vsrc)) return { status: 'FAIL', detail: 'extractor not integrated into verify (grammar missing)' };
+      needSupa();
+      // Post-soak evidence: visible Renogy rows carrying captured HTML.
+      const renogy = await pageDeals('product_id,description_html', '&hidden=eq.false&shop_name=eq.Renogy%20DE');
+      if (!renogy.length) return { status: 'FAIL', detail: 'no visible Renogy DE rows to evidence' };
+      const withHtml = renogy.filter((r) => r.description_html && r.description_html.trim());
+      if (!withHtml.length) return { status: 'FAIL', detail: `0/${renogy.length} visible Renogy rows have captured description_html (page-capture soak pending)` };
+      return { status: 'PASS', detail: `${withHtml.length}/${renogy.length} visible Renogy rows carry captured content (reported share; presence per TH-3 is the gate)` };
+    },
+  },
+  {
+    id: 'EC-4', title: 'snapshot covers all rows daily',
+    run: async () => {
+      const src = readFileSync(path.join(ROOT, 'scripts/snapshot-prices.cjs'), 'utf8');
+      if (/hidden=eq\.false/.test(src)) return { status: 'FAIL', detail: 'snapshot still filters hidden rows' };
+      if (!/covered=\$\{deals\.length\} total=/.test(src)) return { status: 'FAIL', detail: 'covered=/total= grammar missing' };
+      needSupa();
+      // Post-soak guard: every deal (hidden included) has a snapshot ≤48h.
+      const ids = await pageDeals('product_id', '');
+      if (ids.length < CATALOG_FLOOR) return { status: 'FAIL', detail: `catalog floor: ${ids.length}` };
+      const since = new Date(Date.now() - 48 * 3600e3).toISOString().slice(0, 10);
+      const hist = [];
+      for (let from = 0; ; from += 1000) {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/price_history?select=product_id&day=gte.${since}`, { headers: { ...supaHeaders(), Range: `${from}-${from + 999}` } });
+        if (!res.ok) return { status: 'FAIL', detail: `price_history read: HTTP ${res.status}` };
+        const page = await res.json();
+        hist.push(...page);
+        if (page.length < 1000) break;
+      }
+      const have = new Set(hist.map((h) => h.product_id));
+      const missing = ids.filter((d) => !have.has(d.product_id));
+      if (missing.length > 0) return { status: 'FAIL', detail: `${missing.length}/${ids.length} deals lack a 48h snapshot (hidden-coverage soak pending)` };
+      return { status: 'PASS', detail: `all ${ids.length} deals snapshotted within 48h` };
+    },
+  },
   {
     id: 'EC-5', title: 'feed_attrs + fill-rate report',
     run: async () => {
@@ -228,7 +266,29 @@ const ECS = [
       }
     },
   },
-  { id: 'EC-11', title: 'committed/attempted grammar + chaos tests', run: RED('Stage 2 (T2.2) + Stage 3 (T3.4)') },
+  {
+    id: 'EC-11', title: 'committed/attempted grammar + chaos tests',
+    run: async () => {
+      const tsrc = readFileSync(path.join(ROOT, 'src/lib/ingest/verify-write-classes.test.ts'), 'utf8');
+      if (!/retries once/.test(tsrc) || !/invalid-key smoke/.test(tsrc)) return { status: 'FAIL', detail: 'retry/invalid-key tests missing' };
+      try {
+        execFileSync('pnpm', ['vitest', 'run', 'src/lib/ingest/verify-write-classes.test.ts', '--silent'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+      } catch (e) {
+        if (e.code === 'ENOENT') return { status: 'FAIL', detail: 'pnpm/vitest unavailable on this runner (not a test failure)' };
+        return { status: 'FAIL', detail: 'chaos/retry tests failing' };
+      }
+      try {
+        const j = ghJson('repos/oleg1981-sudo/DealRadar/actions/workflows/verify-awin.yml/runs?event=schedule&status=completed&per_page=3');
+        const recent = (j.workflow_runs || []).filter((r) => Date.now() - Date.parse(r.created_at) < 48 * 3600e3);
+        if (!recent.length) return { status: 'FAIL', detail: 'tests green; no scheduled verify run ≤48h for the grammar' };
+        const log = execFileSync('gh', ['run', 'view', String(recent[0].id), '--repo', 'oleg1981-sudo/DealRadar', '--log'], { encoding: 'utf8', maxBuffer: 64e6 });
+        if (!/patches committed=\d+ attempted=\d+/.test(log)) return { status: 'FAIL', detail: `tests green; committed=/attempted= grammar absent from run ${recent[0].id} (deploy soak pending)` };
+        return { status: 'PASS', detail: `tests green; grammar live in run ${recent[0].id}` };
+      } catch (e) {
+        return { status: 'SKIP', detail: `tests green; gh unavailable: ${e.message.slice(0, 80)}` };
+      }
+    },
+  },
   {
     id: 'EC-12', title: 'alert channel test-fire artifact',
     run: async () => {
@@ -261,10 +321,95 @@ const ECS = [
       }
     },
   },
-  { id: 'EC-14', title: 'conditional blocks render iff data', run: RED('Stage 4 (T4.1)') },
-  { id: 'EC-15', title: 'description always renders (presence)', run: RED('Stage 4 (T4.1)') },
-  { id: 'EC-16', title: 'brand mapping coverage', run: RED('Stage 4 (T4.2)') },
-  { id: 'EC-17', title: 'JSON-LD parity with row data', run: RED('Stage 5 (T5.1)') },
+  {
+    id: 'EC-14', title: 'conditional blocks render iff data',
+    run: async () => {
+      needSupa();
+      const withAttrs = await pageDeals('slug,feed_attrs', '&hidden=eq.false&feed_attrs=not.is.null&order=product_id.asc&limit=3');
+      const withoutAttrs = (await pageDeals('slug,feed_attrs,gallery', '&hidden=eq.false&feed_attrs=is.null&order=product_id.asc&limit=3'));
+      const fetchHtml = async (slug) => { const r = await fetch(`${SITE}/en/deal/${slug}`); return r.status === 200 ? r.text() : null; };
+      if (withAttrs.length < 3) return { status: 'SKIP', detail: 'insufficient-cohort: <3 attr-bearing visible deals (feed_attrs soak pending)' };
+      for (const d of withAttrs) {
+        const html = await fetchHtml(d.slug);
+        if (!html) return { status: 'FAIL', detail: `${d.slug}: page unavailable` };
+        if (!/data-block="(attrs|shipping)"/.test(html)) return { status: 'FAIL', detail: `${d.slug}: attr-bearing row renders no attrs/shipping block` };
+      }
+      for (const d of withoutAttrs) {
+        const html = await fetchHtml(d.slug);
+        if (!html) return { status: 'FAIL', detail: `${d.slug}: page unavailable` };
+        if (/data-block="attrs"/.test(html)) return { status: 'FAIL', detail: `${d.slug}: attr-less row renders an attrs block (fabrication?)` };
+      }
+      const multi = (await pageDeals('slug,gallery', '&hidden=eq.false&order=product_id.asc&limit=50')).find((d) => d.gallery && d.gallery.length >= 2);
+      if (multi) {
+        const html = await fetchHtml(multi.slug);
+        const m = html && html.match(/data-gallery-count="(\d+)"/);
+        if (!m || parseInt(m[1], 10) < 2) return { status: 'FAIL', detail: `${multi.slug}: enriched gallery renders <2 images` };
+      }
+      return { status: 'PASS', detail: `attrs present ×${withAttrs.length}, absent ×${withoutAttrs.length}, gallery render OK` };
+    },
+  },
+  {
+    id: 'EC-15', title: 'description always renders (presence)',
+    run: async () => {
+      needSupa();
+      const echo = await pageDeals('slug', '&hidden=eq.false&description_html=is.null&order=product_id.asc&limit=200');
+      const probes = (await visibleDeals()).slice(0, 2).map((r) => r.slug).concat(echo.slice(0, 1).map((r) => r.slug));
+      if (!probes.length) return { status: 'FAIL', detail: 'no probe rows (empty read — RLS/anon key?)' };
+      for (const slug of probes) {
+        const r = await fetch(`${SITE}/en/deal/${slug}`);
+        if (r.status !== 200) return { status: 'FAIL', detail: `${slug}: HTTP ${r.status}` };
+        const html = await r.text();
+        if (!/data-block="description"/.test(html)) return { status: 'FAIL', detail: `${slug}: no description block rendered (FR-4.2-as-amended violated or deploy pending)` };
+      }
+      return { status: 'PASS', detail: `description block present on ${probes.length} probes (incl. plain-text-only row)` };
+    },
+  },
+  {
+    id: 'EC-16', title: 'brand mapping coverage',
+    run: async () => {
+      const mapPath = path.join(ROOT, 'scripts/lib/brand-map.json');
+      if (!existsSync(mapPath)) return { status: 'FAIL', detail: 'brand-map.json missing' };
+      const { map } = JSON.parse(readFileSync(mapPath, 'utf8'));
+      const aliases = Object.keys(map || {});
+      if (!aliases.length) return { status: 'FAIL', detail: 'brand map empty' };
+      needSupa();
+      const polluted = [];
+      for (const alias of aliases) {
+        const rows = await pageDeals('product_id', `&hidden=eq.false&brand=eq.${encodeURIComponent(alias)}&limit=1`);
+        if (rows.length) polluted.push(alias);
+      }
+      if (polluted.length) return { status: 'FAIL', detail: `visible rows still carry polluted aliases: ${polluted.join(', ')} (ingest-refresh soak pending)` };
+      return { status: 'PASS', detail: `0 visible rows with any of ${aliases.length} mapped aliases` };
+    },
+  },
+  {
+    id: 'EC-17', title: 'JSON-LD parity with row data',
+    run: async () => {
+      needSupa();
+      const rows = await pageDeals('slug,gallery,image_url,feed_attrs,rating_source,mpn,model_number', '&hidden=eq.false&order=product_id.asc&limit=3');
+      if (!rows.length) return { status: 'FAIL', detail: 'no probe rows (empty read — RLS/anon key?)' };
+      const unproxy = (u) => {
+        if (!/(^|\.)productserve\.com\//i.test(u)) return u;
+        try { const inner = new URL(u).searchParams.get('url'); if (!inner) return u; const o = /^https?:\/\//i.test(inner) ? inner : 'https://' + inner.replace(/^ssl:/i, ''); return new URL(o).protocol === 'https:' ? o : u; } catch { return u; }
+      };
+      for (const d of rows) {
+        const r = await fetch(`${SITE}/en/deal/${d.slug}`);
+        if (r.status !== 200) return { status: 'FAIL', detail: `${d.slug}: HTTP ${r.status}` };
+        const html = await r.text();
+        const m = html.match(/<script type="application\/ld\+json">(\{"@context":"https:\/\/schema.org\/","@type":"Product".*?)<\/script>/s);
+        if (!m) return { status: 'FAIL', detail: `${d.slug}: Product JSON-LD missing` };
+        let ld;
+        try { ld = JSON.parse(m[1].replace(/\\u003c/g, '<')); } catch { return { status: 'FAIL', detail: `${d.slug}: JSON-LD unparsable` }; }
+        const expected = [...new Set((d.gallery?.length ? d.gallery : [d.image_url]).filter(Boolean).map(unproxy))];
+        const img = Array.isArray(ld.image) ? ld.image.length : ld.image ? 1 : 0;
+        if (img !== expected.length) return { status: 'FAIL', detail: `${d.slug}: JSON-LD image ${img} ≠ deduped gallery ${expected.length}` };
+        if (!!ld.additionalProperty !== !!(d.feed_attrs && Object.keys(d.feed_attrs).length)) return { status: 'FAIL', detail: `${d.slug}: additionalProperty presence mismatch` };
+        if (ld.aggregateRating && !d.rating_source) return { status: 'FAIL', detail: `${d.slug}: aggregateRating without provenance` };
+        if (ld.model && !(d.mpn || d.model_number)) return { status: 'FAIL', detail: `${d.slug}: synthetic model emitted (Q-7 violation)` };
+      }
+      return { status: 'PASS', detail: `JSON-LD parity on ${rows.length} probes` };
+    },
+  },
   {
     id: 'EC-18', title: 'markdown agent surface + discovery',
     run: async () => {
@@ -312,7 +457,25 @@ const ECS = [
       return { status: 'PASS', detail: `invariants hold on ${r.visible} rows (multi-image ${r.multiImagePct}% reported); mutation fails correctly; ${runDetail}` };
     },
   },
-  { id: 'EC-20', title: 'reference-deal global check', run: RED('final acceptance') },
+  {
+    id: 'EC-20', title: 'reference-deal global check',
+    run: async () => {
+      needSupa();
+      // Reference deal, else fallback cohort: any visible Renogy DE deal.
+      const ref = await pageDeals('slug,gallery,description,description_html,product_name', "&product_id=eq.awin%3ADE%3Aadv127459%3A47006571266179");
+      const cohort = ref.length && !ref[0].hidden ? ref : await pageDeals('slug,gallery,description,description_html,product_name', '&hidden=eq.false&shop_name=eq.Renogy%20DE&order=product_id.asc&limit=5');
+      const q = cohort.find((d) => d.gallery && d.gallery.length >= 2);
+      if (!q) return { status: 'FAIL', detail: 'no qualifying Renogy DE deal (gallery ≥2)' };
+      const r = await fetch(`${SITE}/en/deal/${q.slug}`);
+      if (r.status !== 200) return { status: 'FAIL', detail: `${q.slug}: HTTP ${r.status}` };
+      const html = await r.text();
+      if (!/data-block="description"/.test(html)) return { status: 'FAIL', detail: `${q.slug}: no description block (Q-3 extractor pending for Renogy)` };
+      const m = html.match(/data-gallery-count="(\d+)"/);
+      if (!m || parseInt(m[1], 10) < 2) return { status: 'FAIL', detail: `${q.slug}: rendered gallery <2` };
+      if (!/"image":\[/.test(html)) return { status: 'FAIL', detail: `${q.slug}: JSON-LD image array missing` };
+      return { status: 'PASS', detail: `${q.slug}: gallery ≥2 rendered, description block present, JSON-LD image array emitted` };
+    },
+  },
   {
     id: 'EC-21', title: 'write classes (M2 amendment)',
     run: async () => {

@@ -6,19 +6,21 @@ import { getDealBySlug } from '@/lib/db/deals.repo';
 import type { NormalizedDeal } from '@/lib/providers/types';
 import { formatPrice, formatDiscount } from '@/lib/utils/format';
 import { decorateAffiliateUrl } from '@/lib/utils/affiliate';
-import { priceWindow } from '@/lib/utils/price-history';
+import { priceWindow, priceSeries } from '@/lib/utils/price-history';
 import { queryPriceHistory } from '@/lib/db/price-history.repo';
 import Image from 'next/image';
 import { PriceAlertButton } from '@/components/deals/PriceAlertButton';
 import { PriceHeatBar } from '@/components/deals/PriceHeatBar';
 import { DealGallery } from '@/components/deals/DealGallery';
 import { DealDescription } from '@/components/deals/DealDescription';
+import { DealAttributes } from '@/components/deals/DealAttributes';
 import { SponsoredBadge } from '@/components/deals/SponsoredBadge';
 import { productGallery } from '@/lib/utils/product-details';
+import { sanitizeDescriptionHtml } from '@/lib/utils/description-render';
 import { Badge } from '@/components/ui/badge';
 import { routing } from '@/i18n/routing';
 import { siteUrl } from '@/lib/utils/site-url';
-import { clampSchemaText, extractTrailingModelCode, SCHEMA_NAME_MAX, SCHEMA_DESCRIPTION_MAX } from '@/lib/seo/schema-text';
+import { clampSchemaText, SCHEMA_NAME_MAX, SCHEMA_DESCRIPTION_MAX } from '@/lib/seo/schema-text';
 import { gaItem, gaItemAttr } from '@/lib/analytics/items';
 import { TrackViewItem } from '@/components/analytics/TrackView';
 import { matchSubCategory } from '@/lib/categories';
@@ -95,14 +97,17 @@ export default async function DealDetailPage({ params }: Props) {
   // today-dot sits at its true position instead of pinned at the green end.
   // Best-effort — on any DB error the graph keeps its honest two-point fallback.
   const history = await queryPriceHistory(deal.productId).catch(() => []);
-  const pw = priceWindow(deal, history.map((p) => p.salePrice));
+  const recorded = history.map((p) => p.salePrice);
+  const pw = priceWindow(deal, recorded);
+  // [FR-4.4] Without recorded rows the series is the synthetic compare-at
+  // fallback — the bar then labels itself a price RANGE, never history.
+  const series = priceSeries(deal, recorded);
   const dealUrl = `${BASE_URL}/${params.locale}/deal/${params.slug}`;
 
   // [FR-GEO-1 / P-3] Product + single Offer + itemCondition — built per-item from
   // the deal record. A single-seller deal is a plain Offer, not an AggregateOffer
   // (which models multiple sellers and triggers Search Console warnings at offerCount:1).
   const gallery = productGallery(deal);
-  const modelCode = deal.mpn || deal.modelNumber ? null : extractTrailingModelCode(deal.productName);
   const jsonLd = {
     '@context': 'https://schema.org/',
     '@type': 'Product',
@@ -118,7 +123,29 @@ export default async function DealDetailPage({ params }: Props) {
     ...(deal.mpn || deal.modelNumber ? { mpn: deal.mpn || deal.modelNumber } : {}),
     // Google: sku is the merchant-specific ID and must not contain whitespace.
     ...(deal.merchantSku ? { sku: deal.merchantSku.replace(/\s+/g, '') } : {}),
-    ...(modelCode ? { model: modelCode } : {}),
+    // [Q-7: remove-heuristic] `model` only from DB identity fields — never
+    // derived from the product name.
+    ...(deal.modelNumber || deal.mpn ? { model: deal.modelNumber || deal.mpn } : {}),
+    // [FR-5.1] Real feed attributes only (FR-PDP-6: nothing fabricated) —
+    // additionalProperty mirrors the visible attrs block one-to-one.
+    ...(deal.feedAttrs && Object.keys(deal.feedAttrs).length
+      ? {
+          additionalProperty: Object.entries(deal.feedAttrs).map(([name, value]) => ({
+            '@type': 'PropertyValue', name, value,
+          })),
+        }
+      : {}),
+    // [Q-5] aggregateRating ONLY with provenance — second-hand ratings are
+    // never emitted unattributed.
+    ...(deal.ratingSource && deal.ratingValue != null
+      ? {
+          aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: deal.ratingValue,
+            ...(deal.ratingCount != null ? { ratingCount: deal.ratingCount } : {}),
+          },
+        }
+      : {}),
     // priceSpecification/valueAddedTaxIncluded removed 2026-07-15: dropped from
     // Google's product docs entirely (audit pass 2); EU consumer prices are
     // VAT-inclusive by law, so the visible price already carries that meaning.
@@ -253,9 +280,11 @@ export default async function DealDetailPage({ params }: Props) {
             <div className="mb-6">
               <PriceHeatBar
                 window={pw}
+                series={series}
                 currency={deal.currency}
                 locale={params.locale}
                 captionLabel={t('priceHistoryTitle')}
+                rangeCaptionLabel={t('priceRangeTitle')}
                 todayLabel={t('today')}
               />
             </div>
@@ -309,9 +338,22 @@ export default async function DealDetailPage({ params }: Props) {
           section — it renders nothing when neither source yields content. */}
       <DealDescription html={deal.descriptionHtml} text={deal.description} title={t('details')} />
 
+      {/* Real product attributes from the feed [FR-4.1]: attrs + shipping
+          tables and the provenance-gated rating block. Renders nothing when
+          the feed shipped nothing. */}
+      <DealAttributes
+        attrs={deal.feedAttrs}
+        ratingValue={deal.ratingValue}
+        ratingCount={deal.ratingCount}
+        ratingSource={deal.ratingSource}
+        attrsTitle={t('attrsTitle')}
+        shippingTitle={t('shippingTitle')}
+        ratingTitle={t('ratingTitle')}
+      />
+
       {/* Real identifiers only — no fabricated spec rows (FR-PDP-6). */}
       {(deal.brand || deal.modelNumber || deal.mpn || deal.eanCode) && (
-        <section className="mt-10 border-t border-zinc-100 pt-8">
+        <section data-block="specs-id" className="mt-10 border-t border-zinc-100 pt-8">
           <h2 className="mb-4 text-lg font-semibold text-zinc-900">{t('specsTitle')}</h2>
           <dl className="grid max-w-md grid-cols-[auto,1fr] gap-x-8 gap-y-2 text-sm">
             {deal.brand && (
@@ -339,8 +381,11 @@ export default async function DealDetailPage({ params }: Props) {
       {/* The gallery's non-hero images at real size — the merchant feature
           graphics stored in `gallery` are unreadable as 64px thumbnails.
           Skipped when the captured description already embeds images. */}
-      {!deal.descriptionHtml?.includes('<img') && gallery.length > 1 && (
-        <section className="mt-10 border-t border-zinc-100 pt-8">
+      {/* [FR-4.5] The suppression check runs on the SANITIZED output — what
+          actually renders — not the raw stored HTML, so a sanitizer change can
+          never silently strip inline images while this section stays hidden. */}
+      {!(deal.descriptionHtml && sanitizeDescriptionHtml(deal.descriptionHtml).includes('<img')) && gallery.length > 1 && (
+        <section data-block="more-images" className="mt-10 border-t border-zinc-100 pt-8">
           <h2 className="mb-4 text-lg font-semibold text-zinc-900">{t('moreImages')}</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {gallery.slice(1, 7).map((src) => (

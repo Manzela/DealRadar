@@ -46,6 +46,7 @@
 const fs = require('fs');
 const path = require('path');
 const { reduceMerchantHtml } = require('./lib/description.cjs');
+const { extractPageContent } = require('./lib/extractors/page-content.cjs');
 
 const args = process.argv.slice(2);
 const has = (f) => args.includes(f);
@@ -110,6 +111,17 @@ async function fetchUrl(url, attempt = 0) {
   }
   if (!res.ok) return { status: res.status, url: res.url, error: `http-${res.status}` };
   try { return { status: res.status, url: res.url, json: await res.json() }; } catch { return { status: res.status, url: res.url, error: 'bad-json' }; }
+}
+
+/** GET a merchant page as text (one gentle 429 retry) — used ONLY for rows
+ *  whose product JSON ships no description [FR-1.4/Q-3]. */
+async function fetchPageHtml(url, attempt = 0) {
+  let res;
+  try { res = await fetch(url, { headers: HEADERS }); }
+  catch { return null; }
+  if (res.status === 429 && attempt < 1) { await sleep(2000); return fetchPageHtml(url, attempt + 1); }
+  if (!res.ok) return null;
+  try { return await res.text(); } catch { return null; }
 }
 
 /** Pick the variant: by the ?variant=<id> in the deal URL, else price-closest. */
@@ -455,7 +467,7 @@ if (IS_MAIN) (async () => {
   console.log(`[verify] checking ${deals.length} deals across ${byHost.size} shops (apply=${APPLY}, ${DELAY_MS}ms/host, run=${RUN_ID})…`);
 
   const reasons = {}, errKinds = {};
-  let ok = 0, errors = 0, skippedRows = 0, done = 0, hidden = 0, unhidden = 0, priceUpdated = 0, htmlCaptured = 0, galleriesCaptured = 0;
+  let ok = 0, errors = 0, skippedRows = 0, done = 0, hidden = 0, unhidden = 0, priceUpdated = 0, htmlCaptured = 0, galleriesCaptured = 0, pageCaptured = 0;
   const samples = [];
   let stopDueToDeadline = false;
 
@@ -504,8 +516,23 @@ if (IS_MAIN) (async () => {
         consec = 0;
         // Content capture for EVERY fetched row [FR-1.2] — hidden included.
         const contentFields = {};
-        if (captureHtml && live.descriptionHtml) {
-          const reduced = reduceMerchantHtml(live.descriptionHtml);
+        let rawDescription = live.descriptionHtml;
+        // Renogy-class fallback [FR-1.4/Q-3]: product JSON has no description →
+        // one extra paced page fetch; sections/metafields + JSON-LD rating.
+        if (captureHtml && !rawDescription && !deal.description_html) {
+          const pageHtml = await fetchPageHtml(deal.merchant_url);
+          if (pageHtml) {
+            const pc = extractPageContent(pageHtml);
+            if (pc.descriptionHtml) { rawDescription = pc.descriptionHtml; pageCaptured++; }
+            if (contentCols && pc.rating && pc.rating.value != null) {
+              contentFields.rating_value = Math.round(pc.rating.value * 100) / 100;
+              if (pc.rating.count != null) contentFields.rating_count = pc.rating.count;
+              contentFields.rating_source = 'merchant-jsonld';
+            }
+          }
+        }
+        if (captureHtml && rawDescription) {
+          const reduced = reduceMerchantHtml(rawDescription);
           if (reduced && reduced !== (deal.description_html || null)) {
             contentFields.description_html = reduced;
           }
@@ -583,6 +610,7 @@ if (IS_MAIN) (async () => {
   console.log(`  un-hidden (back in stock): ${unhidden}`);
   console.log(`  merchant descriptions captured/updated: ${htmlCaptured}${captureHtml ? '' : ' (capture disabled — column missing)'}`);
   console.log(`  galleries captured/topped-up: ${galleriesCaptured}${contentCols ? '' : ' (disabled — column missing)'}`);
+  console.log(`  page-content captures: ${pageCaptured}`);
   console.log(`  errors: ${errors}, skipped: ${skippedRows} ${JSON.stringify(errKinds)}`);
   if (samples.length) { console.log('  sample price updates:'); samples.forEach((s) => console.log(`    ${s}`)); }
 

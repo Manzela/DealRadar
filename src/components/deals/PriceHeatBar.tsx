@@ -1,13 +1,16 @@
 import { formatPrice } from '@/lib/utils/format';
-import type { PriceWindow } from '@/lib/utils/price-history';
+import type { PriceWindow, PriceSeries } from '@/lib/utils/price-history';
 
 /**
  * Price cardiogram. Price is the vertical axis — expensive at the top (red),
  * cheap at the bottom (green). Two modes:
- *  - `series` given (recorded price history, oldest → newest, ending at today):
- *    a chronological curve, dot on the last (= today's) point.
- *  - no `series`: the price-range fallback — a straight line across the window
- *    with the dot at today's position within it.
+ *  - recorded `series` (non-synthetic, ≥2 points, last = today): a
+ *    chronological curve, dot on the last (= today's) point, captioned as
+ *    price history.
+ *  - no `series`, or the synthetic compare-at fallback: a straight line across
+ *    the window with the dot at today's position — captioned/announced as a
+ *    price RANGE, never as measured history [FR-4.4,
+ *    docs/specs/pdp-full-content].
  */
 const VB_W = 100;
 const VB_H = 40;
@@ -20,14 +23,18 @@ export function PriceHeatBar({
   currency,
   locale,
   captionLabel,
+  rangeCaptionLabel,
   todayLabel,
 }: {
   window: PriceWindow;
-  /** Chronological recorded prices (≥2 points, last = today). Omit for the range fallback. */
-  series?: number[];
+  /** priceSeries() output. Omitted or synthetic → range mode. */
+  series?: PriceSeries;
   currency: string;
   locale: string;
+  /** Caption for genuinely recorded history (chronological mode). */
   captionLabel: string;
+  /** Caption when the line is only the low–high window (range mode). */
+  rangeCaptionLabel: string;
   todayLabel: string;
 }) {
   const low = formatPrice(window.low, currency, locale);
@@ -37,8 +44,10 @@ export function PriceHeatBar({
   // Chronological mode plots the recorded curve oldest → newest. The fallback
   // draws cheapest → dearest, left to right (and bottom → top on the price
   // axis), so the line runs from the green bottom-left up to the red top-right.
-  const chronological = series !== undefined && series.length >= 2;
-  const points = chronological ? series : [window.low, window.high];
+  const chronological = series !== undefined && !series.synthetic && series.points.length >= 2;
+  const points = chronological ? series.points : [window.low, window.high];
+  // Caption is mode-bound: a synthetic range must never read as history.
+  const caption = chronological ? captionLabel : rangeCaptionLabel;
   const last = points.length - 1;
   const span = window.high - window.low || 1;
   const x = (i: number) => PAD_X + (i / last) * (VB_W - 2 * PAD_X);
@@ -56,7 +65,7 @@ export function PriceHeatBar({
   return (
     <div className="mt-1 rounded-xl border border-zinc-200/70 bg-gradient-to-b from-white to-zinc-50/60 p-2 shadow-sm ring-1 ring-zinc-900/5">
       <div className="mb-1 flex items-center justify-between gap-2">
-        <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">{captionLabel}</p>
+        <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">{caption}</p>
         <p className="text-[10px] font-semibold tabular-nums text-zinc-600">
           {todayLabel} <span className="text-accent">{today}</span>
         </p>
@@ -70,7 +79,7 @@ export function PriceHeatBar({
         <div
           className="relative flex-1"
           role="img"
-          aria-label={`${captionLabel}: ${low} – ${high}. ${todayLabel}: ${today}.`}
+          aria-label={`${caption}: ${low} – ${high}. ${todayLabel}: ${today}.`}
         >
           <svg
             viewBox={`0 0 ${VB_W} ${VB_H}`}

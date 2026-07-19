@@ -94,6 +94,21 @@ describe('FR-1.1 — keep-richer gallery merge', () => {
   });
 });
 
+describe('FR-3.4 / EC-11 — invalid-key smoke: fast loud failure', () => {
+  it('verify-awin exits non-zero within seconds on bogus credentials (explicit child env — never inherited)', async () => {
+    const { spawnSync } = await import('node:child_process');
+    const r = spawnSync(process.execPath, ['scripts/verify-awin.cjs', '--limit', '1'], {
+      // Explicit minimal env — bogus creds must never be masked by an
+      // inherited .env.local (loadEnvLocal is main-gated, this is belt+braces).
+      env: { PATH: process.env.PATH, NODE_ENV: 'test', SUPABASE_URL: 'https://invalid.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'bogus-key' },
+      timeout: 15000,
+      encoding: 'utf8',
+    });
+    expect(r.status).not.toBe(0);
+    expect(`${r.stdout}${r.stderr}`).toMatch(/FAILED|failed/);
+  }, 20000);
+});
+
 describe('FR-3.4 / EC-11 — flushPatches retries once then commits', () => {
   afterEach(() => vi.unstubAllGlobals());
 

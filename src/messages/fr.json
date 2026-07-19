@@ -39,13 +39,17 @@
     "affiliateBadge": "Lien affilié",
     "affiliateBadgeTooltip": "Nous pouvons percevoir une commission sur les achats effectués via ce lien, sans coût supplémentaire pour vous.",
     "priceHistoryTitle": "Historique des prix",
+    "priceRangeTitle": "Fourchette de prix",
     "backToDeals": "Retour à toutes les offres",
     "breadcrumbHome": "Accueil",
     "ninetyDayLow": "Prix le plus bas sur 90 jours sur DealRadar.",
     "notLowestNote": "Prix le plus bas sur 90 jours : {price}.",
     "verifiedAt": "Vérifié à {time} CET.",
     "priceNote": "Price and availability may change — confirm at the store.",
-    "dealUnavailable": "Cette offre n'est plus disponible."
+    "dealUnavailable": "Cette offre n'est plus disponible.",
+    "attrsTitle": "Caractéristiques du produit",
+    "shippingTitle": "Expédition et livraison",
+    "ratingTitle": "Note"
   },
   "alert": {
     "button": "Recevoir une alerte de prix",

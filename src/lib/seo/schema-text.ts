@@ -9,6 +9,11 @@ export const SCHEMA_NAME_MAX = 150;
 /** JSON-LD Product.description limit (Merchant Center description spec: 1–5,000). */
 export const SCHEMA_DESCRIPTION_MAX = 5000;
 
+// extractTrailingModelCode (name-suffix → JSON-LD `model` guess) was removed
+// 2026-07-19 per Q-7 (docs/specs/pdp-full-content §10): `model` is emitted
+// only from DB model_number/mpn — a heuristic over the product name is
+// synthesis, however conservative.
+
 /**
  * Cap `s` at `max` chars INCLUDING the appended ellipsis, cutting at a
  * whitespace boundary — never mid-word, never inside a surrogate pair.
@@ -16,11 +21,6 @@ export const SCHEMA_DESCRIPTION_MAX = 5000;
  * 40% of the budget (same semantics as the ingest's feedDescription cap).
  * Returns the input unchanged when it already fits.
  */
-// extractTrailingModelCode (name-suffix → JSON-LD `model` guess) was removed
-// 2026-07-19 per Q-7 (docs/specs/pdp-full-content §10): `model` is emitted
-// only from DB model_number/mpn — a heuristic over the product name is
-// synthesis, however conservative.
-
 export function clampSchemaText(s: string, max: number): string {
   if (s.length <= max) return s;
   let head = s.slice(0, max - 1);

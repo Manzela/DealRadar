@@ -21,7 +21,7 @@ Plan: `plan.md` v1.1 · Spec: `spec.md` v1.2 · Status legend: `[ ]` open · `[x
 - [x] T1.2 Harness skeleton (done; baseline run: 2 PASS / 5 FAIL / 17 RED; TH-1=0, TH-2=0, TH-3=2 via service-role SQL — invariants nearly green already) `scripts/verify-spec-pdp-content.mjs`: acceptance-mode env, EC registry, RED stubs ×24; implement EC-24, EC-8(file), TH-1..TH-3 SQL. Verify: exits non-zero listing RED ECs.
 
 ## Stage 2 — capture-at-verify
-- [~] T2.1 Extractor library (Shopify path live inline in verify incl. gallery capture; JSON-LD/OG fallback chain + fixtures pending) (shopify js/json → JSON-LD → OG; priceOk split; fixtures). Verify: vitest green.
+- [x] T2.1 Extractor library: Shopify path inline in verify (gallery capture); page-content chain (JSON-LD → section-anchored metafields → OG) in scripts/lib/extractors/page-content.cjs with live-captured Renogy fixture + 5 tests (shopify js/json → JSON-LD → OG; priceOk split; fixtures). Verify: vitest green.
 - [x] T2.2 verify-awin.cjs three-write-class redesign (done 2026-07-19: liveness/content/watermark classes, hidden-touch removal, /products/ sweep filter excl. 22.9k redirect rows, stalest-first order, fetch_outcomes persistence, capture provenance, committed/attempted grammar, graceful column degrade; EC-9/21 green post-soak) (liveness PATCH / content-only PATCH / liveness touch on verified-alive-visible only; remove hidden-stays-hidden touches; stale-hide re-keyed to last_verified; stalest-first order; graceful degrade on missing columns; migration-applied checkpoint; committed/attempted grammar; chaos drill + invalid-key smoke via thin-loop-drill.yml). Verify: EC-21 cohorts non-vacuous post-soak; EC-1/2/9/11(part).
 - [x] T2.3 snapshot-prices covers hidden (filter dropped); enrich-galleries → bounded backfill. Verify: EC-4.
 - [x] T2.4 upsertDeals keep-richer via uniform key omission (description_html precedent; PGRST102-safe) + FR-3.7 static audit clean + write-class/merge/retry vitest ×8 (per-signature batching — PGRST102 trap) + FR-3.7 all-writers audit (+ deferral note for M2 watermark/tripwire). Verify: EC-22 vitest; EC-21 grep.
@@ -34,17 +34,17 @@ Plan: `plan.md` v1.1 · Spec: `spec.md` v1.2 · Status legend: `[ ]` open · `[x
 - [x] T3.4 Loud no-ops (purge-alerts + db-migrate exit 1 on missing secrets; check-budgets --strict wired in cost-guardrail) (purge-alerts/db-migrate/cost-guardrail exit non-zero on missing secrets, upstream only). Verify: EC-11(rest).
 
 ## Stage 4 — rendering
-- [ ] T4.1 data-block markers + new conditional blocks (attrs/shipping/condition/energy/variants) + FR-4.2-as-amended + rating block + FR-4.5 More-images with sanitizer-aware `<img>` coupling. Verify: EC-14, EC-15.
-- [ ] T4.2 Brand census → scripts/lib/brand-map.json → ingest normalization + JSON-LD. Verify: EC-16.
-- [ ] T4.3 Remove extractTrailingModelCode; PriceHeatBar relabel range-not-history. Verify: EC-17 clause.
+- [x] T4.1 data-block markers + new conditional blocks (attrs/shipping/condition/energy/variants) + FR-4.2-as-amended + rating block + FR-4.5 More-images with sanitizer-aware `<img>` coupling. Verify: EC-14, EC-15.
+- [x] T4.2 Brand census (agent: 10 aliases mapped, 11 exceptions; EC-16 green after next ingest refresh) → scripts/lib/brand-map.json → ingest normalization + JSON-LD. Verify: EC-16.
+- [x] T4.3 Remove extractTrailingModelCode (agent) + PriceHeatBar range-relabel with synthetic flag; PriceHeatBar relabel range-not-history. Verify: EC-17 clause.
 
 ## Stage 5 — emission
-- [ ] T5.1 JSON-LD enrichment (image array, additionalProperty, itemCondition, shipping, sku, rating-with-provenance, model-from-DB). Verify: EC-17.
-- [ ] T5.2 /deal/<slug>/md route + llms.txt + discovery index. Verify: EC-18.
-- [ ] T5.3 Richness shared module + strict budgets + upstream scheduled workflow; full FR-3.6 split via first_published_at (graduates T0.1's interim filter). Verify: EC-13, EC-19.
+- [x] T5.1 JSON-LD enrichment (additionalProperty mirrors attrs 1:1, provenance-gated aggregateRating, model from DB only) (image array, additionalProperty, itemCondition, shipping, sku, rating-with-provenance, model-from-DB). Verify: EC-17.
+- [x] T5.2 /deal/<slug>/md route + public/llms.txt discovery + llms.txt + discovery index. Verify: EC-18.
+- [x] T5.3 Richness shared module (scripts/lib/richness.cjs → harness EC-19 + check-budgets --strict) + full IndexNow split via first_published_at + strict budgets + upstream scheduled workflow; full FR-3.6 split via first_published_at (graduates T0.1's interim filter). Verify: EC-13, EC-19.
 
 ## Stage 6 — gated expansions
-- [ ] T6.1 Renogy section extractor (+ page-level rating capture). Verify: EC-3.
+- [x] T6.1 Renogy-class page extractor (generic Shopify metafield sections; boilerplate excluded by section anchor; rating capture rides the parse) (+ page-level rating capture). Verify: EC-3.
 - [ ] T6.2 P1-7 price-drop promotion (baseline ≥N days of hidden snapshots; liveness write; sets first_published_at). Verify: EC-24 unaffected.
 
 ## Final
