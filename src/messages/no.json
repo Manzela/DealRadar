@@ -39,13 +39,17 @@
     "affiliateBadge": "Affiliatlenke",
     "affiliateBadgeTooltip": "Vi kan tjene en provisjon på kjøp via denne lenken, uten ekstra kostnad for deg.",
     "priceHistoryTitle": "Prishistorikk",
+    "priceRangeTitle": "Prisintervall",
     "backToDeals": "Tilbake til alle tilbud",
     "breadcrumbHome": "Hjem",
     "ninetyDayLow": "Laveste pris på 90 dager på DealRadar.",
     "notLowestNote": "Laveste på 90 dager: {price}.",
     "verifiedAt": "Bekreftet kl. {time} CET.",
     "priceNote": "Price and availability may change — confirm at the store.",
-    "dealUnavailable": "Dette tilbudet er ikke lenger tilgjengelig."
+    "dealUnavailable": "Dette tilbudet er ikke lenger tilgjengelig.",
+    "attrsTitle": "Produktegenskaper",
+    "shippingTitle": "Frakt og levering",
+    "ratingTitle": "Vurdering"
   },
   "alert": {
     "button": "Få varsel om beste pris",

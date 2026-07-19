@@ -25,16 +25,19 @@ const PROSE =
 
 interface Props {
   readonly html?: string | null;
+  /** Pre-sanitized HTML (page.tsx sanitizes once per request); wins over `html`. */
+  readonly safeHtml?: string;
   readonly text?: string | null;
   readonly title: string;
 }
 
-export function DealDescription({ html, text, title }: Props) {
-  const safe = html ? sanitizeDescriptionHtml(html) : '';
+export function DealDescription({ html, safeHtml, text, title }: Props) {
+  const safe = safeHtml ?? (html ? sanitizeDescriptionHtml(html) : '');
   const paragraphs = !safe && text ? splitPlainDescription(text) : [];
   if (!safe && paragraphs.length === 0) return null;
   return (
-    <section className="mt-10 border-t border-zinc-100 pt-8">
+    // data-block: stable machine marker for the acceptance harness [FR-4.1/EC-15].
+    <section data-block="description" className="mt-10 border-t border-zinc-100 pt-8">
       <h2 className="mb-4 text-lg font-semibold text-zinc-900">{title}</h2>
       <div className="max-w-3xl">
         {safe ? (

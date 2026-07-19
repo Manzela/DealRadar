@@ -38,17 +38,27 @@ export function priceWindow(deal: NormalizedDeal, history: number[] = []): Price
   return { low, high, current, position };
 }
 
+export interface PriceSeries {
+  /** Chronological prices (oldest → newest), always ending at today's. */
+  points: number[];
+  /** True when no recorded rows back the line — the two points are only the
+   *  compare-at → today RANGE, not measured prices. Consumers must present a
+   *  synthetic series as a price range, never as history [FR-4.4,
+   *  docs/specs/pdp-full-content]. */
+  synthetic: boolean;
+}
+
 /**
  * The known prices as a chronological series (oldest → newest), always ending
- * at today's price. With ≥2 recorded days this is the real recorded curve;
+ * at today's price. With recorded rows this is the real recorded curve;
  * otherwise it degrades to the regular price then today's price — a straight
- * line (two equal points when there's no discount).
+ * line (two equal points when there's no discount) flagged `synthetic`.
  */
-export function priceSeries(deal: NormalizedDeal, history: number[] = []): number[] {
+export function priceSeries(deal: NormalizedDeal, history: number[] = []): PriceSeries {
   const current = round2(deal.salePrice);
   const pts = history.map(round2);
   if (pts.length === 0 || pts[pts.length - 1] !== current) pts.push(current);
-  if (pts.length >= 2) return pts;
+  if (pts.length >= 2) return { points: pts, synthetic: false };
   const high = round2(Math.max(deal.originalPrice, current));
-  return high > current ? [high, current] : [current, current];
+  return { points: high > current ? [high, current] : [current, current], synthetic: true };
 }
