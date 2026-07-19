@@ -84,13 +84,25 @@ async function fetchExisting() {
 }
 
 async function upsert(rows) {
-  for (let i = 0; i < rows.length; i += 500) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/affiliate_programmes?on_conflict=programme_id`, {
-      method: 'POST',
-      headers: { ...pgHeaders, Prefer: 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify(rows.slice(i, i + 500)),
-    });
-    if (!res.ok) throw new Error(`PostgREST upsert: ${res.status} ${(await res.text()).slice(0, 200)}`);
+  // PostgREST requires IDENTICAL key sets within one request (PGRST102).
+  // Rows that transitioned carry an extra `relationship_changed_at` key the
+  // others must not have (null would clobber stored timestamps on merge) —
+  // so batch per key-signature.
+  const bySignature = new Map();
+  for (const r of rows) {
+    const sig = Object.keys(r).sort().join(',');
+    if (!bySignature.has(sig)) bySignature.set(sig, []);
+    bySignature.get(sig).push(r);
+  }
+  for (const group of bySignature.values()) {
+    for (let i = 0; i < group.length; i += 500) {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/affiliate_programmes?on_conflict=programme_id`, {
+        method: 'POST',
+        headers: { ...pgHeaders, Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify(group.slice(i, i + 500)),
+      });
+      if (!res.ok) throw new Error(`PostgREST upsert: ${res.status} ${(await res.text()).slice(0, 200)}`);
+    }
   }
 }
 
