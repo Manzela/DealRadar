@@ -422,6 +422,7 @@ async function fetchExistingPrices() {
   let idx = null;
   let scanned = 0, kept = 0, upserted = 0;
   const byCategory = new Map(), byMerchant = new Map();
+  const legacyScannedById = new Map(); // merchant_id → rows seen in the cid feed (pre-gate)
   const samples = [];
   let batch = [];
   const t0 = Date.now();
@@ -442,6 +443,11 @@ async function fetchExistingPrices() {
       if (capped) return;
       scanned++;
       const g = (k) => (idx[k] !== undefined ? (cols[idx[k]] ?? '') : '');
+      // Per-merchant scan counts (BEFORE the deal gate) — the coverage watchdog
+      // uses these to tell "scanned but nothing discounted" (fine, v1 drops
+      // non-deals) from "absent from the feed entirely" (a genuine gap).
+      const scanMid = g('merchant_id').trim();
+      if (scanMid) legacyScannedById.set(scanMid, (legacyScannedById.get(scanMid) || 0) + 1);
       const deal = normalizeRow(g);
       if (!deal) return;
       kept++;
@@ -535,6 +541,38 @@ async function fetchExistingPrices() {
     }
     process.stdout.write('\n');
     if (hiddenNew.length) console.log(`[awin] enhanced: ${hiddenNew.length} new products inserted HIDDEN (await verifier-proven discounts)`);
+
+    // Persist the run summary for the coverage watchdog (programmes-sync reads
+    // it at 04:30 to reconcile "what the ingest actually consumed" against the
+    // feed list and the DB). Best-effort like the feed-size metric: a failure
+    // here surfaces as a watchdog red ("no ingest summary"), never a run fail.
+    // ONLY full runs write it: a manual --limit smoke or --no-enhanced run must
+    // not clobber the nightly evidence with a fresh-but-partial snapshot.
+    if (LIMIT || !ENHANCED) {
+      console.log('[awin] partial run (--limit/--no-enhanced) — ingest summary NOT recorded');
+    } else try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/ops_metrics?on_conflict=key`, {
+        method: 'POST',
+        headers: supaHeaders({ 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }),
+        body: JSON.stringify([{
+          key: 'awin_ingest_summary',
+          value: kept,
+          recorded_at: new Date().toISOString(),
+          meta: {
+            ranAt: new Date().toISOString(),
+            scanned, kept, upserted, excludedLegacy,
+            hiddenNew: hiddenNew.length,
+            enhanced: enhanced ? enhanced.perFeed : null,
+            enhancedUnmapped: enhanced ? Object.fromEntries(enhanced.unmapped) : null,
+            legacyScannedById: Object.fromEntries(legacyScannedById),
+          },
+        }]),
+      });
+      if (!res.ok) console.warn(`[awin] ingest-summary metric write failed: HTTP ${res.status}`);
+      else console.log('[awin] ingest summary recorded for the coverage watchdog');
+    } catch (e) {
+      console.warn('[awin] ingest-summary metric write failed:', e.message);
+    }
     console.log(`[awin] preserved verified prices for ${preserved} existing deals; feed price used for ${all.length - preserved} new ones`);
     console.log(`[awin] kept ${galleriesKept} enriched galleries (richer than the feed's)`);
 

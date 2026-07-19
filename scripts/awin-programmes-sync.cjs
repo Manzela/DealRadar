@@ -94,6 +94,131 @@ async function upsert(rows) {
   }
 }
 
+// ── coverage watchdog (ingest-v2 P0-5) ─────────────────────────────────────────
+// Reconciles feed-list actives × last-ingest results × per-advertiser DB counts
+// so a joined advertiser contributing zero products (or a stale/broken feed)
+// becomes a 🔴 digest line instead of a months-long silent gap. Pure logic in
+// scripts/lib/coverage.cjs; everything here is best-effort data plumbing.
+const { parseCsv, buildCoverageReport, formatCoverage, coverageFingerprint } = require('./lib/coverage.cjs');
+
+/** One retry with a short backoff: a single 04:30 blip must not become a red. */
+async function withRetry(label, fn) {
+  try { return await fn(); }
+  catch (e) {
+    console.warn(`[awin-sync] ${label} failed (${e.message}) — retrying once`);
+    await new Promise((r) => setTimeout(r, 5000));
+    return fn();
+  }
+}
+
+async function fetchFeedList() {
+  const feedUrl = process.env.AWIN_FEED_URL || '';
+  const key = (feedUrl.match(/\/apikey\/([0-9a-f]+)/i) || [])[1];
+  if (!key) throw new Error('AWIN_FEED_URL missing/unparseable — cannot reach the feed list');
+  const res = await fetch(`https://ui.awin.com/productdata-darwin-download/publisher/${PUBLISHER_ID}/${key}/1/feedList`);
+  if (!res.ok) throw new Error(`feed list: HTTP ${res.status}`);
+  return parseCsv(await res.text());
+}
+
+async function fetchDealAttribution() {
+  const out = [];
+  for (let from = 0; ; from += 1000) {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/deals?source=eq.awin&select=product_id,merchant_id,shop_name,hidden&order=product_id`,
+      { headers: { ...pgHeaders, Range: `${from}-${from + 999}` } },
+    );
+    if (!res.ok) throw new Error(`deals read: HTTP ${res.status}`);
+    const rows = await res.json();
+    out.push(...rows);
+    if (rows.length < 1000) break;
+  }
+  return out;
+}
+
+async function fetchIngestSummary() {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/ops_metrics?key=eq.awin_ingest_summary&select=meta,recorded_at`,
+    { headers: pgHeaders },
+  );
+  // A failing READ is a check failure (throw → honest ⚠️ message), NOT
+  // "summaryMissing" — that state must only ever mean the ingest didn't persist.
+  if (!res.ok) throw new Error(`ops_metrics read: HTTP ${res.status}`);
+  const rows = await res.json();
+  if (!rows.length || !rows[0].meta) return null;
+  // The ingest runs daily at 03:00, this sync at 04:30 — a healthy summary is
+  // ~1.5h old. Anything past ~27h means LAST NIGHT'S ingest didn't persist
+  // (crashed before the write) — that must red on the FIRST miss, not the second.
+  const age = Date.now() - Date.parse(rows[0].recorded_at);
+  return age > 27 * 3600000 ? null : rows[0].meta;
+}
+
+/** Returns { section, reds, fingerprint } — never throws. */
+async function coverageSection(joinedProgrammes) {
+  try {
+    const [feedRows, dealRows, ingestSummary] = await Promise.all([
+      withRetry('feed list', fetchFeedList),
+      withRetry('deal attribution', fetchDealAttribution),
+      withRetry('ingest summary', fetchIngestSummary),
+    ]);
+    const report = buildCoverageReport({ feedRows, dealRows, joinedProgrammes, ingestSummary, now: new Date() });
+    return { section: formatCoverage(report), reds: report.reds, fingerprint: coverageFingerprint(report) };
+  } catch (e) {
+    return {
+      section: `## Feed coverage (watchdog)\n⚠️ **Coverage check failed** (after retry): ${e.message} — coverage state UNKNOWN this run.`,
+      reds: 1,
+      fingerprint: `check-failed:${e.message}`,
+    };
+  }
+}
+
+// ── managed alert issue: one living issue, updated on change, closed on clear ──
+const ALERT_LABEL = 'awin-coverage-alert';
+const FP_RE = /<!-- watchdog-fingerprint: (.*?) -->/;
+
+async function ghApi(method, path, body) {
+  const gh = process.env.GITHUB_TOKEN, repo = process.env.GITHUB_REPOSITORY;
+  if (!gh || !repo) return null;
+  const res = await fetch(`https://api.github.com/repos/${repo}${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${gh}`, Accept: 'application/vnd.github+json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) { console.warn(`[awin-sync] github ${method} ${path}: HTTP ${res.status}`); return null; }
+  return res.json();
+}
+
+/** Create/update/close the single coverage-alert issue. Deduped by red-set
+ *  fingerprint: identical reds tomorrow → no writes, no notification noise. */
+async function syncAlertIssue(coverage) {
+  const open = await ghApi('GET', `/issues?labels=${ALERT_LABEL}&state=open&per_page=1`);
+  const existing = Array.isArray(open) && open[0] ? open[0] : null;
+  const body = `${coverage.section}\n\n_Updated ${new Date().toISOString().slice(0, 16)}Z by the coverage watchdog._\n<!-- watchdog-fingerprint: ${coverage.fingerprint} -->`;
+
+  if (coverage.reds === 0) {
+    if (existing) {
+      await ghApi('POST', `/issues/${existing.number}/comments`, { body: '🟢 All coverage alerts resolved — closing.' });
+      await ghApi('PATCH', `/issues/${existing.number}`, { state: 'closed' });
+      console.log(`[awin-sync] coverage clear — closed alert issue #${existing.number}`);
+    }
+    return;
+  }
+  if (!existing) {
+    const created = await ghApi('POST', '/issues', {
+      title: `🔴 AWIN coverage alerts (${coverage.reds})`, body, labels: [ALERT_LABEL],
+    });
+    if (created) console.log(`[awin-sync] opened coverage alert issue #${created.number}`);
+    return;
+  }
+  const prevFp = (existing.body || '').match(FP_RE)?.[1];
+  if (prevFp === coverage.fingerprint) {
+    console.log(`[awin-sync] coverage reds unchanged — no issue update (#${existing.number})`);
+    return;
+  }
+  await ghApi('PATCH', `/issues/${existing.number}`, { title: `🔴 AWIN coverage alerts (${coverage.reds})`, body });
+  await ghApi('POST', `/issues/${existing.number}/comments`, { body: `Red set changed:\n\n${coverage.section}` });
+  console.log(`[awin-sync] updated coverage alert issue #${existing.number}`);
+}
+
 async function githubIssue(title, body) {
   const gh = process.env.GITHUB_TOKEN, repo = process.env.GITHUB_REPOSITORY;
   if (!gh || !repo) { console.warn('[awin-sync] no GITHUB_TOKEN/REPOSITORY — digest printed only'); return; }
@@ -169,6 +294,16 @@ async function githubIssue(title, body) {
   // means genuinely-new-in-the-directory (a trickle).
   const SEED_THRESHOLD = 50;
   const isSeedRun = newRecommendations.length > SEED_THRESHOLD;
+
+  // Coverage watchdog (P0-5): computed every run. Alerts live in ONE managed
+  // issue (created on red, updated only when the red set changes, closed on
+  // clear) — the daily digest carries the section as context when it posts.
+  const joined = fetched.filter((r) => r.relationship === 'joined')
+    .map((r) => ({ programme_id: r.programme_id, name: r.name }));
+  const coverage = await coverageSection(joined);
+  console.log(`[awin-sync] coverage: ${coverage.reds} red flag(s) [${coverage.fingerprint.slice(0, 80)}]`);
+  await syncAlertIssue(coverage);
+
   if (events.length > 0 || newRecommendations.length > 0) {
     const top = newRecommendations.sort((a, b) => b.policy_score - a.policy_score);
     const recLines = top
@@ -184,6 +319,7 @@ async function githubIssue(title, body) {
       '',
       events.length ? `## Relationship changes\n${events.join('\n')}` : '',
       recSection,
+      coverage.section,
       '',
       '_Generated by awin-programmes-sync. Policy: scripts/awin-programmes-sync.cjs. The join click is deliberately human._',
     ].filter(Boolean).join('\n');

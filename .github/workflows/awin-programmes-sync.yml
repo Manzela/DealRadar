@@ -41,6 +41,9 @@ jobs:
       - name: Sync programmes + emit join-queue digest
         env:
           AWIN_API_TOKEN: ${{ secrets.AWIN_API_TOKEN }}
+          # Coverage watchdog (P0-5): the feed-list endpoint shares the feed
+          # api key embedded in AWIN_FEED_URL.
+          AWIN_FEED_URL: ${{ secrets.AWIN_FEED_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
