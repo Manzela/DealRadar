@@ -34,11 +34,27 @@ const CATALOG_FLOOR = 1000; // denominator floor: an empty catalog must never va
 // ── helpers ───────────────────────────────────────────────────────────────────
 const supaHeaders = () => ({ apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` });
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** REST fetch with bounded retry on transient failures — the anon 3s
+ *  statement_timeout (57014 → HTTP 500) tips over on large counts while a
+ *  pipeline run loads the table; retry rides it out. Read-only, so safe. */
+async function restFetch(url, init = {}) {
+  const backoff = [1500, 4000, 9000];
+  for (let attempt = 0; ; attempt++) {
+    let res;
+    try { res = await fetch(url, init); }
+    catch (e) { if (attempt >= backoff.length) throw e; await sleep(backoff[attempt]); continue; }
+    if (res.ok || res.status === 206) return res;
+    if (res.status < 500 || attempt >= backoff.length) return res;
+    await sleep(backoff[attempt]);
+  }
+}
+
 /** Page the deals table client-side (PostgREST can't filter on array length). */
 async function pageDeals(select, filter = '') {
   const rows = [];
   for (let from = 0; ; from += 1000) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/deals?select=${select}${filter}`, {
+    const res = await restFetch(`${SUPABASE_URL}/rest/v1/deals?select=${select}${filter}`, {
       headers: { ...supaHeaders(), Range: `${from}-${from + 999}` },
     });
     if (!res.ok) throw new Error(`PostgREST ${res.status}: ${(await res.text()).slice(0, 160)}`);
@@ -61,7 +77,7 @@ class SkipOrFail extends Error {}
  *  invariant is a count, so no row payload ever crosses the wire (the anon
  *  role's 3s statement_timeout forbids full-table pagination). */
 async function headCount(filter, table = 'deals') {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=product_id${filter}`, {
+  const res = await restFetch(`${SUPABASE_URL}/rest/v1/${table}?select=product_id${filter}`, {
     method: 'HEAD',
     headers: { ...supaHeaders(), Prefer: 'count=exact', Range: '0-0' },
   });
@@ -133,7 +149,7 @@ const ECS = [
       const since = new Date(Date.now() - 48 * 3600e3).toISOString().slice(0, 10);
       const hist = [];
       for (let from = 0; ; from += 1000) {
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/price_history?select=product_id&day=gte.${since}`, { headers: { ...supaHeaders(), Range: `${from}-${from + 999}` } });
+        const res = await restFetch(`${SUPABASE_URL}/rest/v1/price_history?select=product_id&day=gte.${since}`, { headers: { ...supaHeaders(), Range: `${from}-${from + 999}` } });
         if (!res.ok) return { status: 'FAIL', detail: `price_history read: HTTP ${res.status}` };
         const page = await res.json();
         hist.push(...page);
@@ -149,7 +165,7 @@ const ECS = [
     id: 'EC-5', title: 'feed_attrs + fill-rate report',
     run: async () => {
       needSupa();
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/ops_metrics?key=eq.awin_fill_rates&select=value,recorded_at`, { headers: supaHeaders() });
+      const res = await restFetch(`${SUPABASE_URL}/rest/v1/ops_metrics?key=eq.awin_fill_rates&select=value,recorded_at`, { headers: supaHeaders() });
       if (!res.ok) return { status: 'FAIL', detail: `ops_metrics read: HTTP ${res.status}` };
       const rows = await res.json();
       if (!rows.length) return { status: 'FAIL', detail: 'awin_fill_rates metric absent (post-merge ingest pending)' };
@@ -194,7 +210,7 @@ const ECS = [
       }
       // SQL half: ops_metrics freshness ≤48h (fill-rate keys land Stage 3).
       needSupa();
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/ops_metrics?select=key,recorded_at&order=recorded_at.desc&limit=5`, { headers: supaHeaders() });
+      const res = await restFetch(`${SUPABASE_URL}/rest/v1/ops_metrics?select=key,recorded_at&order=recorded_at.desc&limit=5`, { headers: supaHeaders() });
       if (!res.ok) return { status: 'FAIL', detail: `ops_metrics read: HTTP ${res.status}` };
       const rows = await res.json();
       const fresh = rows.filter((r) => Date.now() - Date.parse(r.recorded_at) < 48 * 3600e3);
@@ -242,7 +258,7 @@ const ECS = [
       const staleOr = `&or=(last_verified.is.null,last_verified.lt.${encodeURIComponent(cutoff)})`;
       const total = await headCount(F);
       if (total < CATALOG_FLOOR) return { status: 'FAIL', detail: `sweep-eligible floor: only ${total} rows` };
-      const foRes = await fetch(`${SUPABASE_URL}/rest/v1/fetch_outcomes?select=host,status,last_seen`, { headers: supaHeaders() });
+      const foRes = await restFetch(`${SUPABASE_URL}/rest/v1/fetch_outcomes?select=host,status,last_seen`, { headers: supaHeaders() });
       const outcomes = foRes.ok ? await foRes.json() : [];
       const blockedHosts = outcomes
         .filter((o) => /^blocked-/.test(o.status) && Date.now() - Date.parse(o.last_seen) < 48 * 3600e3)
