@@ -610,7 +610,13 @@ const ECS = [
       for (const r of hid) {
         const p = await probe(r.slug);
         if (p.status !== 200) return { status: 'FAIL', detail: `hidden ${r.slug}: HTTP ${p.status} (M2: hidden stays 200)` };
-        if (!p.noindex) return { status: 'FAIL', detail: `hidden ${r.slug} lacks noindex (deploy pending?)` };
+        if (!p.noindex) {
+          // Race guard: a concurrent promote/verify may have un-hidden it
+          // between the list read and the probe (pages are live-DB). Re-check.
+          const now = await pageDeals('hidden', `&slug=eq.${encodeURIComponent(r.slug)}&limit=1`);
+          if (now.length && now[0].hidden === false) continue; // legitimately promoted — not a violation
+          return { status: 'FAIL', detail: `hidden ${r.slug} lacks noindex (still hidden in DB — deploy pending?)` };
+        }
       }
       return { status: 'PASS', detail: `visible ×${vis.length} indexable, hidden ×${hid.length} noindex` };
     },
