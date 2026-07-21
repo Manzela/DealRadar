@@ -49,3 +49,19 @@ Plan: `plan.md` v1.1 · Spec: `spec.md` v1.2 · Status legend: `[ ]` open · `[x
 
 ## Final
 - [ ] TF.1 Full acceptance harness run on upstream — EC-1..EC-24 all executed, EC-20 green.
+
+
+## Acceptance status (2026-07-21)
+
+Harness `node scripts/verify-spec-pdp-content.mjs`: **21/24 PASS, 0 RED**.
+- **EC-6 — ACCEPTED STANDING ALERT (user decision 2026-07-21):** the coverage
+  watchdog correctly flags 2 genuinely stale AWIN feeds (Polo Motorrad CH 65d,
+  Kochblume DE 35d/0-deals). Not a code defect — an upstream feed-freshness
+  condition. User chose to leave it as a truthful open alert rather than add a
+  staleness-exclusion policy. This caps the gate at 23/24-green + 1 accepted-red
+  by deliberate choice; it clears if/when the advertiser feeds refresh.
+- **EC-8, EC-13 — pending one clean scheduled verify cron.** The scheduled
+  verify keeps cancelling at the unbudgeted non-Shopify liveness step (skips
+  Snapshot/IndexNow). **PR #20** budgets that step (verify 90 + liveness 20)
+  so the job completes; the next scheduled cron after #20 merges closes both.
+  EC-11 already green (verify step logs committed=/attempted=).
