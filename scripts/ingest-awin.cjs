@@ -126,6 +126,11 @@ const NAME_CATEGORY_OVERRIDES = [
   // Health (pharmacies): strong, unambiguous pharma signals only — bare words
   // like "Vitamin"/"Shampoo"/"Salbe" are left out to avoid stealing beauty rows.
   [/nahrungsergänzung|mikronährstoffe|brausetabletten|\bampullen?\b|\bglobuli\b|homöopath|arznei|orthomol|fresubin|fortimel/i, 'health'],
+  // Household cleaning/care chemicals. The feed taxonomy rules are English-only
+  // ("kitchen|garden|house|…"), so a German chemicals catalogue matched nothing
+  // and fell through to the `electronics` default (Profichemie, 2026-07-19).
+  // Placed LAST so the pharma/pet/solar rules above still win a shared word.
+  [/reiniger|reinigungs|putzmittel|spülmittel|waschmittel|entkalker|enteiser|entfeuchter|scheibenklar|allzweckreiniger/i, 'home-garden'],
 ];
 function nameOverrideCategory(productName) {
   for (const [re, slug] of NAME_CATEGORY_OVERRIDES) if (re.test(productName || '')) return slug;
@@ -139,6 +144,7 @@ const ADVERTISER_CATEGORY = [
   [/lyra\s*pet|lecker\.?pet/i, 'pets'],
   [/\bapotheke\b|\baliva\b/i, 'health'],
   [/\bbinu\b|korean\s+cosmetics/i, 'beauty'],
+  [/profichemie/i, 'home-garden'],   // household cleaning chemicals
 ];
 function advertiserCategory(advertiserName) {
   for (const [re, slug] of ADVERTISER_CATEGORY) if (re.test(advertiserName || '')) return slug;
