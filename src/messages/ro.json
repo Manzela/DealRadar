@@ -46,13 +46,17 @@
     "affiliateBadge": "Link afiliat",
     "affiliateBadgeTooltip": "Este posibil să primim un comision pentru achizițiile efectuate prin acest link, fără costuri suplimentare pentru dumneavoastră.",
     "priceHistoryTitle": "Istoricul prețurilor",
+    "priceRangeTitle": "Interval de preț",
     "backToDeals": "Înapoi la toate ofertele",
     "breadcrumbHome": "Acasă",
     "ninetyDayLow": "Cel mai mic preț din ultimele 90 de zile pe DealRadar.",
     "notLowestNote": "Minim în 90 de zile: {price}.",
     "verifiedAt": "Verificat la ora {time} CET.",
     "priceNote": "Price and availability may change — confirm at the store.",
-    "dealUnavailable": "Această ofertă nu mai este disponibilă."
+    "dealUnavailable": "Această ofertă nu mai este disponibilă.",
+    "attrsTitle": "Caracteristicile produsului",
+    "shippingTitle": "Expediere și livrare",
+    "ratingTitle": "Evaluare"
   },
   "alert": {
     "button": "Primește alertă de preț",

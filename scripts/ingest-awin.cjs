@@ -27,6 +27,8 @@ const https = require('https');
 const zlib = require('zlib');
 const { feedDescription } = require('./lib/description.cjs');
 const { normalizeEnhancedRow } = require('./lib/enhanced-feed.cjs');
+const { makeAttrCollector, FillRates } = require('./lib/feed-attrs.cjs');
+const { normalizeBrand } = require('./lib/brand-normalize.cjs');
 
 // ── args & env ───────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -171,7 +173,7 @@ function mapCategory(categoryName, merchantCategory) {
 
 // ── normalise one CSV row → a `deals` table row (snake_case), or null to skip ──
 const num = (v) => { v = (v || '').trim(); if (!v) return null; const f = parseFloat(v); return Number.isFinite(f) ? f : null; };
-function normalizeRow(g) {
+function normalizeRow(g, collectAttrs) {
   if (g('in_stock').trim() !== '1') return null;            // only buyable items
   if (isPrescriptionOnly(g('product_name'), g('description'))) return null; // Rx not advertisable
   const currency = (g('currency') || 'EUR').trim().toUpperCase();
@@ -213,7 +215,7 @@ function normalizeRow(g) {
     discount_percent: discountPercent,
     currency,
     category: advertiserCategory(g('merchant_name')) ?? nameOverrideCategory(g('product_name')) ?? mapCategory(g('category_name').trim(), g('merchant_category').trim()),
-    brand: g('brand_name').trim() || null,
+    brand: normalizeBrand(g('brand_name').trim()) || null, // census-seeded alias → canonical (FR-4.3)
     image_url: g('aw_image_url').trim() || g('merchant_image_url').trim() || null, // productserve proxy first
     gallery: gallery.length ? gallery : null,
     description,
@@ -226,6 +228,8 @@ function normalizeRow(g) {
     model_number: g('model_number').trim() || g('product_model').trim() || null,
     merchant_sku: g('merchant_product_id').trim() || null,
     merchant_id: g('merchant_id').trim() || null,
+    // [FR-2.1] every other non-empty feed column, generically collected.
+    feed_attrs: collectAttrs ? collectAttrs(g) : null,
     country: COUNTRY,
     city: null,
     is_sponsored: true,
@@ -383,6 +387,7 @@ async function runFeedListFeeds(counters) {
 
   const rows = [];
   const enhancedRows = [];
+  const fillRates = counters.fillRates;
   const unmapped = new Map();
   const perFeed = [];
   const legacyScannedById = new Map();
@@ -401,27 +406,36 @@ async function runFeedListFeeds(counters) {
       ? f['URL']
       : `https://productdata.awin.com/datafeed/download/apikey/${key}/fid/${f['Feed ID'].replace(/^F/i, '')}/columns/${LEGACY_FID_COLUMNS}/format/csv/delimiter/%2C/compression/gzip/`;
     let idx2 = null;
+    let collect2 = null;
+    const advId2 = f['Advertiser ID'];
     let scanned2 = 0, kept2 = 0;
     const feedRows2 = []; // legacy rows buffer per feed (capped below)
     try {
       await ingest(url,
-        (header) => { idx2 = Object.fromEntries(header.map((name, i) => [name.replace(/^\uFEFF/, ''), i])); },
+        (header) => {
+          const names = header.map((name) => name.replace(/^\uFEFF/, ''));
+          idx2 = Object.fromEntries(names.map((name, i) => [name, i]));
+          collect2 = makeAttrCollector(names, isGoogle ? 'google' : 'legacy',
+            fillRates ? (col) => fillRates.bump(advId2, col) : null);
+        },
         (cols) => {
           scanned2++;
           const g = (k) => (idx2[k] !== undefined ? (cols[idx2[k]] ?? '') : '');
           if (isGoogle) {
-            const row = normalizeEnhancedRow(g, ctx);
+            const row = normalizeEnhancedRow(g, { ...ctx, collectAttrs: collect2 });
             if (!row) return;
             kept2++;
+            if (fillRates) fillRates.row(advId2);
             enhancedRows.push(row);
             counters.byCategory.set(row.category, (counters.byCategory.get(row.category) || 0) + 1);
             counters.byMerchant.set(row.shop_name, (counters.byMerchant.get(row.shop_name) || 0) + 1);
           } else {
             const mid = g('merchant_id').trim() || f['Advertiser ID'];
             legacyScannedById.set(mid, (legacyScannedById.get(mid) || 0) + 1);
-            const row = normalizeRow(g);
+            const row = normalizeRow(g, collect2);
             if (!row) return;
             kept2++;
+            if (fillRates) fillRates.row(advId2);
             if (!row.merchant_id) row.merchant_id = f['Advertiser ID'];
             feedRows2.push(row);
           }
@@ -516,6 +530,8 @@ async function fetchExistingPrices() {
 // ── main ───────────────────────────────────────────────────────────────────────
 (async () => {
   let idx = null;
+  let mainCollect = null;
+  const fillRates = new FillRates();
   let scanned = 0, kept = 0, upserted = 0;
   const byCategory = new Map(), byMerchant = new Map();
   const legacyScannedById = new Map(); // merchant_id → rows seen in the cid feed (pre-gate)
@@ -534,7 +550,13 @@ async function fetchExistingPrices() {
 
   let capped = false;
   const feedBytes = await ingest(FEED_URL,
-    (header) => { idx = Object.fromEntries(header.map((name, i) => [name.replace(/^\uFEFF/, ''), i])); },
+    (header) => {
+      const names = header.map((name) => name.replace(/^\uFEFF/, ''));
+      idx = Object.fromEntries(names.map((name, i) => [name, i]));
+      // cid feed = many advertisers in one stream; per-column fill is tracked
+      // under the aggregate 'cid' bucket (per-fid feeds report per-advertiser).
+      mainCollect = makeAttrCollector(names, 'legacy', (col) => fillRates.bump('cid', col));
+    },
     (cols) => {
       if (capped) return;
       scanned++;
@@ -544,9 +566,10 @@ async function fetchExistingPrices() {
       // non-deals) from "absent from the feed entirely" (a genuine gap).
       const scanMid = g('merchant_id').trim();
       if (scanMid) legacyScannedById.set(scanMid, (legacyScannedById.get(scanMid) || 0) + 1);
-      const deal = normalizeRow(g);
+      const deal = normalizeRow(g, mainCollect);
       if (!deal) return;
       kept++;
+      fillRates.row('cid');
       byCategory.set(deal.category, (byCategory.get(deal.category) || 0) + 1);
       byMerchant.set(deal.shop_name, (byMerchant.get(deal.shop_name) || 0) + 1);
       if (samples.length < 8) samples.push({
@@ -566,7 +589,7 @@ async function fetchExistingPrices() {
   // Skipped on --limit smoke runs; a failure here never sinks the legacy pass.
   let feedListPass = null;
   if (ENHANCED && !LIMIT) {
-    try { feedListPass = await runFeedListFeeds({ byCategory, byMerchant }); }
+    try { feedListPass = await runFeedListFeeds({ byCategory, byMerchant, fillRates }); }
     catch (e) { console.warn('[awin] feed-list pass FAILED (cid ingest unaffected):', e.message); }
   }
   let excludedLegacy = 0;
@@ -678,6 +701,16 @@ async function fetchExistingPrices() {
     } catch (e) {
       console.warn('[awin] ingest-summary metric write failed:', e.message);
     }
+    // [FR-2.1/EC-5] per-advertiser column fill-rates over kept rows.
+    for (const line of fillRates.logLines()) console.log(line);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/ops_metrics?on_conflict=key`, {
+        method: 'POST',
+        headers: supaHeaders({ 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }),
+        body: JSON.stringify([{ key: 'awin_fill_rates', value: fillRates.byAdv.size, recorded_at: new Date().toISOString(), meta: fillRates.summary() }]),
+      });
+      if (!res.ok) console.warn(`[awin] fill-rate metric write failed: HTTP ${res.status}`);
+    } catch (e) { console.warn('[awin] fill-rate metric write failed:', e.message); }
     console.log(`[awin] preserved verified prices for ${preserved} existing deals; feed price used for ${all.length - preserved} new ones`);
     console.log(`[awin] kept ${galleriesKept} enriched galleries (richer than the feed's)`);
 
@@ -698,6 +731,22 @@ async function fetchExistingPrices() {
     if (!staleRes.ok) throw new Error(`stale-hide failed: HTTP ${staleRes.status} ${await staleRes.text()}`);
     const staleCount = (staleRes.headers.get('content-range') || '').split('/')[1] || '0';
     console.log(`[awin] stale-hide: ${staleCount} deals unseen for 3+ days hidden`);
+
+    // TH-3 enforcement [Q-8, docs/specs/pdp-full-content]: a visible row with
+    // NO description data (feed empty AND nothing captured) is an incomplete
+    // PDP — completeness invariants gate publication. It un-hides the moment
+    // either source supplies a description (feed refresh or verifier capture
+    // promoting it back through the normal paths).
+    const th3Res = await fetch(
+      `${SUPABASE_URL}/rest/v1/deals?hidden=eq.false&description_html=is.null&or=(description.is.null,description.eq.)`,
+      {
+        method: 'PATCH',
+        headers: supaHeaders({ 'Content-Type': 'application/json', Prefer: 'return=minimal,count=exact' }),
+        body: JSON.stringify({ hidden: true }),
+      },
+    );
+    if (!th3Res.ok) console.warn(`[awin] TH-3 enforcement failed: HTTP ${th3Res.status}`);
+    else console.log(`[awin] TH-3 enforcement: ${(th3Res.headers.get('content-range') || '').split('/')[1] || '0'} visible no-description deals hidden`);
   }
 
   const secs = ((Date.now() - t0) / 1000).toFixed(1);

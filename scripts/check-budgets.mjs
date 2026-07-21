@@ -75,6 +75,26 @@ function stub(name, reason) {
   console.warn(`[budgets] UNMEASURED  ${name} — ${reason}`);
 }
 
+// PostgREST access (preferred): the cost-guardrail runner only needs
+// SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY — no psql, no SUPABASE_DB_URL
+// [FR-3.4 follow-up: the db-url secret was never configured upstream and the
+// psql path silently stubbed for weeks].
+const restUrl = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+const restKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const restHeaders = { apikey: restKey, Authorization: `Bearer ${restKey}` };
+
+async function restCount(table) {
+  const res = await fetch(`${restUrl}/rest/v1/${table}?select=*`, {
+    method: 'HEAD',
+    headers: { ...restHeaders, Prefer: 'count=exact', Range: '0-0' },
+  });
+  if (!res.ok && res.status !== 206) throw new Error(`HEAD ${table}: HTTP ${res.status}`);
+  const range = res.headers.get('content-range') || '';
+  const total = Number(range.split('/')[1]);
+  if (!Number.isFinite(total)) throw new Error(`no count in content-range for ${table}`);
+  return total;
+}
+
 /** Run a SQL script via psql; return trimmed stdout. Throws on non-zero exit. */
 function sql(script) {
   const res = spawnSync(psqlBin, [dbUrl, '-v', 'ON_ERROR_STOP=1', '-tA', '-c', script], {
@@ -86,23 +106,35 @@ function sql(script) {
 }
 
 // ── 1. DB row count (MEASURABLE) ────────────────────────────────────────────
-function checkDbRowCount() {
+async function checkDbRowCount() {
   const NAME = 'DB row count';
-  if (!dbUrl) return stub(NAME, 'SUPABASE_DB_URL (or DATABASE_URL) is not set');
-  if (!psqlBin) return stub(NAME, 'psql not found on this machine/runner');
-
   let j;
-  try {
-    j = JSON.parse(
-      sql(`select json_build_object(
-        'deals', (select count(*) from public.deals),
-        'price_history', (select count(*) from public.price_history),
-        'transactions', (select count(*) from public.transactions),
-        'price_alerts', (select count(*) from public.price_alerts)
-      )`),
-    );
-  } catch (e) {
-    return stub(NAME, `query failed: ${e.message}`);
+  if (restUrl && restKey) {
+    try {
+      j = {
+        deals: await restCount('deals'),
+        price_history: await restCount('price_history'),
+        transactions: await restCount('transactions'),
+        price_alerts: await restCount('price_alerts'),
+      };
+    } catch (e) {
+      return stub(NAME, `PostgREST count failed: ${e.message}`);
+    }
+  } else if (dbUrl && psqlBin) {
+    try {
+      j = JSON.parse(
+        sql(`select json_build_object(
+          'deals', (select count(*) from public.deals),
+          'price_history', (select count(*) from public.price_history),
+          'transactions', (select count(*) from public.transactions),
+          'price_alerts', (select count(*) from public.price_alerts)
+        )`),
+      );
+    } catch (e) {
+      return stub(NAME, `query failed: ${e.message}`);
+    }
+  } else {
+    return stub(NAME, 'neither SUPABASE_URL+SERVICE_ROLE_KEY nor SUPABASE_DB_URL+psql available');
   }
 
   for (const [table, countStr] of Object.entries(j)) {
@@ -120,22 +152,35 @@ function checkDbRowCount() {
 }
 
 // ── 2. AWIN feed egress (MEASURABLE, via ops_metrics) ───────────────────────
-function checkAwinEgress() {
+async function checkAwinEgress() {
   const NAME = 'AWIN feed egress';
-  if (!dbUrl) return stub(NAME, 'SUPABASE_DB_URL (or DATABASE_URL) is not set (needed to read ops_metrics)');
-  if (!psqlBin) return stub(NAME, 'psql not found on this machine/runner');
-
   let j;
-  try {
-    j = JSON.parse(
-      sql(`select json_build_object(
-        'table_exists', (select to_regclass('public.ops_metrics') is not null),
-        'value', (select value from public.ops_metrics where key = 'awin_feed_bytes'),
-        'age_hours', (select round(extract(epoch from (now() - recorded_at)) / 3600, 1) from public.ops_metrics where key = 'awin_feed_bytes')
-      )`),
-    );
-  } catch (e) {
-    return stub(NAME, `query failed: ${e.message}`);
+  if (restUrl && restKey) {
+    try {
+      const res = await fetch(`${restUrl}/rest/v1/ops_metrics?key=eq.awin_feed_bytes&select=value,recorded_at`, { headers: restHeaders });
+      if (res.status === 404) return stub(NAME, 'ops_metrics table does not exist yet — run `pnpm db:migrate`');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const rows = await res.json();
+      j = rows.length
+        ? { table_exists: true, value: rows[0].value, age_hours: (Date.now() - Date.parse(rows[0].recorded_at)) / 3600e3 }
+        : { table_exists: true, value: null, age_hours: null };
+    } catch (e) {
+      return stub(NAME, `PostgREST read failed: ${e.message}`);
+    }
+  } else if (dbUrl && psqlBin) {
+    try {
+      j = JSON.parse(
+        sql(`select json_build_object(
+          'table_exists', (select to_regclass('public.ops_metrics') is not null),
+          'value', (select value from public.ops_metrics where key = 'awin_feed_bytes'),
+          'age_hours', (select round(extract(epoch from (now() - recorded_at)) / 3600, 1) from public.ops_metrics where key = 'awin_feed_bytes')
+        )`),
+      );
+    } catch (e) {
+      return stub(NAME, `query failed: ${e.message}`);
+    }
+  } else {
+    return stub(NAME, 'neither SUPABASE_URL+SERVICE_ROLE_KEY nor SUPABASE_DB_URL+psql available');
   }
 
   if (!j.table_exists) {
@@ -178,11 +223,52 @@ function checkVertexTokenSpend() {
   );
 }
 
-console.log('[budgets] cost guardrail — v3.1 NFR-COST-1/2/3');
-checkDbRowCount();
-checkAwinEgress();
+// ── 5. PDP richness invariants [FR-5.3/EC-19, docs/specs/pdp-full-content] ──
+// TH-1..TH-3 via the SAME shared module the acceptance harness uses
+// (scripts/lib/richness.cjs) — PostgREST, no psql needed.
+async function checkRichness() {
+  const NAME = 'PDP richness invariants (TH-1 image / TH-2 title / TH-3 description)';
+  const url = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+  const srk = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  if (!url || !srk) return stub(NAME, 'SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY not set');
+  const { createRequire } = await import('node:module');
+  const { computeRichness, gateRichness } = createRequire(import.meta.url)('./lib/richness.cjs');
+  const rows = [];
+  try {
+    for (let from = 0; ; from += 1000) {
+      const res = await fetch(`${url}/rest/v1/deals?hidden=eq.false&select=product_name,description,description_html,gallery,image_url`,
+        { headers: { apikey: srk, Authorization: `Bearer ${srk}`, Range: `${from}-${from + 999}` } });
+      if (!res.ok) return stub(NAME, `PostgREST ${res.status}`);
+      const page = await res.json();
+      rows.push(...page);
+      if (page.length < 1000) break;
+    }
+  } catch (e) { return stub(NAME, `fetch failed: ${e.message}`); }
+  const r = computeRichness(rows);
+  const gate = gateRichness(r);
+  if (!gate.pass) return breach(NAME, gate.failures.join('; '));
+  pass(NAME, `${r.visible} visible; multi-image ${r.multiImagePct}% (reported)`);
+}
+
+console.log('[budgets] cost guardrail — v3.1 NFR-COST-1/2/3 + PDP richness');
+await checkDbRowCount();
+await checkAwinEgress();
 checkGhActionsMinutes();
 checkVertexTokenSpend();
+await checkRichness();
 
 console.log(`[budgets] ${breaches} breach(es), ${unmeasured} unmeasured check(s).`);
+// Strict mode [FR-5.3/FR-3.4, docs/specs/pdp-full-content]: in acceptance/CI
+// on the secrets-bearing repo, an UNMEASURED check is a failure — a stubbed
+// guardrail must never read as green. (The Vertex stub is exempt: it is
+// documented as not-measurable-from-this-repo, not mis-configured.)
+const STRICT = process.argv.includes('--strict');
+// Two PERMANENT documented stubs are exempt (GitHub-minutes billing API and
+// Vertex token ledger — both 'not implemented rather than fabricated', not
+// mis-configuration). Everything else unmeasured is a real strict failure.
+const strictFailures = unmeasured - 2;
+if (STRICT && strictFailures > 0) {
+  console.error(`[budgets] STRICT: ${strictFailures} configurable check(s) unmeasured — failing.`);
+  process.exit(1);
+}
 process.exit(breaches > 0 ? 1 : 0);

@@ -46,13 +46,17 @@
     "affiliateBadge": "Affiliatelink",
     "affiliateBadgeTooltip": "Vi kan optjene en kommission på køb via dette link – uden ekstra omkostninger for dig.",
     "priceHistoryTitle": "Prishistorik",
+    "priceRangeTitle": "Prisinterval",
     "backToDeals": "Tilbage til alle tilbud",
     "breadcrumbHome": "Forside",
     "ninetyDayLow": "Laveste pris i 90 dage på DealRadar.",
     "notLowestNote": "Laveste pris i 90 dage: {price}.",
     "verifiedAt": "Verificeret kl. {time} CET.",
     "priceNote": "Price and availability may change — confirm at the store.",
-    "dealUnavailable": "Dette tilbud er ikke længere tilgængeligt."
+    "dealUnavailable": "Dette tilbud er ikke længere tilgængeligt.",
+    "attrsTitle": "Produktegenskaber",
+    "shippingTitle": "Forsendelse & levering",
+    "ratingTitle": "Bedømmelse"
   },
   "alert": {
     "button": "Få besked om bedste pris",

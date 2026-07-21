@@ -37,6 +37,7 @@
     "affiliateBadgeTooltip": "We may earn a commission on purchases via this link, at no extra cost to you.",
     "priceHistory": "Price · last 3 months",
     "priceHistoryTitle": "Price history",
+    "priceRangeTitle": "Price range",
     "today": "Today",
     "close": "Close",
     "sizes": "Sizes",
@@ -52,7 +53,10 @@
     "notLowestNote": "90-day low: {price}.",
     "verifiedAt": "Verified at {time} CET.",
     "priceNote": "Price and availability may change — confirm at the store.",
-    "dealUnavailable": "This deal is no longer available."
+    "dealUnavailable": "This deal is no longer available.",
+    "attrsTitle": "Product attributes",
+    "shippingTitle": "Shipping & delivery",
+    "ratingTitle": "Rating"
   },
   "alert": {
     "button": "Receive best price alert",

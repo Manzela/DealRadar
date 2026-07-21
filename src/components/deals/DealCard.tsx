@@ -82,11 +82,14 @@ export function DealCard({ deal, priority = false, listName }: { deal: Normalize
           </s>
         </div>
 
+        {/* Cards never query price_history — the bar is always in range mode
+            (rangeCaptionLabel), never captioned as measured history [FR-4.4]. */}
         <PriceHeatBar
           window={pw}
           currency={deal.currency}
           locale={locale}
           captionLabel={t('priceHistory')}
+          rangeCaptionLabel={t('priceRangeTitle')}
           todayLabel={t('today')}
         />
 

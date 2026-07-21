@@ -46,13 +46,17 @@
     "affiliateBadge": "Kumppanuuslinkki",
     "affiliateBadgeTooltip": "Voimme ansaita komission tämän linkin kautta tehdyistä ostoksista ilman lisäkustannuksia sinulle.",
     "priceHistoryTitle": "Hintahistoria",
+    "priceRangeTitle": "Hintaväli",
     "backToDeals": "Takaisin kaikkiin tarjouksiin",
     "breadcrumbHome": "Etusivu",
     "ninetyDayLow": "Alin hinta 90 päivään DealRadarissa.",
     "notLowestNote": "90 päivän alin: {price}.",
     "verifiedAt": "Tarkistettu klo {time} CET.",
     "priceNote": "Price and availability may change — confirm at the store.",
-    "dealUnavailable": "Tämä tarjous ei ole enää saatavilla."
+    "dealUnavailable": "Tämä tarjous ei ole enää saatavilla.",
+    "attrsTitle": "Tuotteen ominaisuudet",
+    "shippingTitle": "Toimitus",
+    "ratingTitle": "Arvosana"
   },
   "alert": {
     "button": "Saa ilmoitus parhaasta hinnasta",
