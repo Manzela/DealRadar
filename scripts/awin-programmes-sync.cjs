@@ -382,8 +382,24 @@ async function githubIssue(title, body) {
   // Coverage watchdog (P0-5): computed every run. Alerts live in ONE managed
   // issue (created on red, updated only when the red set changes, closed on
   // clear) — the daily digest carries the section as context when it posts.
-  const joined = fetched.filter((r) => r.relationship === 'joined')
-    .map((r) => ({ programme_id: r.programme_id, name: r.name }));
+  // Joined set for coverage comes from the DB (persisted source of truth),
+  // UNIONED with this run's fetch: a programme missing from a transient API
+  // page (BrightCHAMPS #114656, 64-vs-16 audit 2026-07-23) must still be
+  // reconciled — the fetch alone silently dropped it from classification.
+  const joinedById = new Map(fetched.filter((r) => r.relationship === 'joined')
+    .map((r) => [String(r.programme_id), { programme_id: r.programme_id, name: r.name }]));
+  try {
+    const dbRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/affiliate_programmes?relationship=eq.joined&select=programme_id,name`,
+      { headers: pgHeaders },
+    );
+    if (dbRes.ok) {
+      for (const r of await dbRes.json()) {
+        if (!joinedById.has(String(r.programme_id))) joinedById.set(String(r.programme_id), r);
+      }
+    }
+  } catch (e) { console.warn('[awin-sync] DB joined-set read failed — coverage uses fetch-only set:', e.message); }
+  const joined = [...joinedById.values()];
   const coverage = await coverageSection(joined);
   await ensureAlertTestFresh();
   console.log(`[awin-sync] coverage: ${coverage.reds} red flag(s) [${coverage.fingerprint.slice(0, 80)}]`);

@@ -196,6 +196,24 @@ function buildCoverageReport({ feedRows, dealRows, joinedProgrammes = [], ingest
     }
   }
 
+  // COMPLETENESS GUARANTEE [64-vs-16 root-cause audit, 2026-07-23]: every
+  // joined programme MUST land in exactly one bucket. BrightCHAMPS UK
+  // (#114656) proved a programme can slip through every path above (feed rows
+  // present but neither active-classified, no-feed, nor divergence-flagged —
+  // e.g. an ID-form mismatch or a membership state outside the known two).
+  // Anything unaccounted is a RED, never silence.
+  const classified = new Set(advertisers.map((a) => String(a.id)));
+  for (const p of joinedProgrammes) {
+    const id = String(p.programme_id);
+    if (classified.has(id)) continue;
+    if (!feedAdvIds.has(id)) continue; // covered by joinedNoFeed
+    advertisers.push({
+      id, name: p.name, populated: 0, live: 0, feeds: 0,
+      status: 'red', detail: 'joined and present in the feed list but UNCLASSIFIED by reconciliation — enumeration gap (ID mismatch or unknown membership state)',
+    });
+  }
+
+
   // No ingest summary at all → the persistence layer or the ingest is broken.
   const summaryMissing = !ingestSummary;
 

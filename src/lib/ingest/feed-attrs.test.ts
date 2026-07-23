@@ -45,3 +45,44 @@ describe('FillRates', () => {
     expect(fr.logLines()).toEqual(['[ingest] fill-rate adv=adv1 col=colour pct=50']);
   });
 });
+
+describe('coverage completeness guarantee (64-vs-16 audit)', () => {
+  const { buildCoverageReport } = require('../../../scripts/lib/coverage.cjs');
+  it('a joined programme with feed rows that fits no bucket becomes an explicit red, never silence', () => {
+    const report = buildCoverageReport({
+      // Feed row exists but with an unknown membership state → not active,
+      // not absent → previously fell through every classification path.
+      feedRows: [{ 'Advertiser ID': '114656', 'Advertiser Name': 'BrightCHAMPS UK', 'Membership Status': 'invited', 'Datafeed Format': 'Awin', 'Language': 'English', 'Feed ID': 'F1', 'Last Imported': '2026-07-20 00:00:00', URL: '' }],
+      dealRows: [],
+      joinedProgrammes: [{ programme_id: 114656, name: 'BrightCHAMPS UK' }],
+      ingestSummary: null,
+      now: new Date('2026-07-23T00:00:00Z'),
+    });
+    const bc = report.advertisers.find((a: { id: string }) => a.id === '114656');
+    expect(bc).toBeTruthy();
+    expect(bc.status).toBe('red'); // divergence red OR the UNCLASSIFIED sweep — never silence
+  });
+
+  it('classification is TOTAL: every joined programme lands in a bucket or joinedNoFeed', () => {
+    const joined = [
+      { programme_id: 1, name: 'ActiveGerman' },
+      { programme_id: 2, name: 'NonActiveState' },
+      { programme_id: 3, name: 'NoFeedAtAll' },
+    ];
+    const report = buildCoverageReport({
+      feedRows: [
+        { 'Advertiser ID': '1', 'Advertiser Name': 'ActiveGerman', 'Membership Status': 'active', 'Datafeed Format': 'Awin', 'Language': 'German', 'Feed ID': 'F1', 'Last Imported': '2026-07-22 00:00:00', URL: '' },
+        { 'Advertiser ID': '2', 'Advertiser Name': 'NonActiveState', 'Membership Status': 'invited', 'Datafeed Format': 'Awin', 'Language': 'German', 'Feed ID': 'F2', 'Last Imported': '2026-07-22 00:00:00', URL: '' },
+      ],
+      dealRows: [],
+      joinedProgrammes: joined,
+      ingestSummary: null,
+      now: new Date('2026-07-23T00:00:00Z'),
+    });
+    const classified = new Set(report.advertisers.map((a: { id: string }) => a.id));
+    const noFeed = new Set(report.joinedNoFeed.map((p: { programme_id: number }) => String(p.programme_id)));
+    for (const p of joined) {
+      expect(classified.has(String(p.programme_id)) || noFeed.has(String(p.programme_id))).toBe(true);
+    }
+  });
+});
